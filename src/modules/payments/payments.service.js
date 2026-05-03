@@ -202,10 +202,6 @@ export const rejectPayment = async (paymentId, tenantId, checkerId, reason, req)
 
   assertTransition(payment.status, 'rejected');
 
-  if (payment.user_id === checkerId) {
-    throw new AppError('SELF_APPROVAL', 'Maker cannot reject their own payment', 403);
-  }
-
   const updated = await db.transaction(async (trx) => {
     const p = await repo.update(paymentId, tenantId, { status: 'rejected' }, trx);
     await repo.insertStatusHistory({
