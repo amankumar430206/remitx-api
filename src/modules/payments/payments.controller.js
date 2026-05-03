@@ -1,0 +1,43 @@
+import * as service from './payments.service.js';
+import { submitPaymentSchema, rejectPaymentSchema } from './payments.validators.js';
+
+export const submit = async (req, res) => {
+  const payload = await submitPaymentSchema.validateAsync(req.body, { abortEarly: false });
+  const idempotencyKey = req.headers['idempotency-key'];
+  const payment = await service.submitPayment(payload, req.user.sub, req.tenantId, idempotencyKey, req);
+  res.status(201).json({ success: true, data: payment, requestId: req.id });
+};
+
+export const list = async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page || '1', 10));
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '20', 10)));
+  const { status } = req.query;
+  const result = await service.listPayments(req.tenantId, req.user.sub, { page, limit, status });
+  res.json({ success: true, data: result.data, meta: result.meta, requestId: req.id });
+};
+
+export const getApprovalQueue = async (req, res) => {
+  const data = await service.listApprovalQueue(req.tenantId);
+  res.json({ success: true, data, requestId: req.id });
+};
+
+export const getOne = async (req, res) => {
+  const payment = await service.getPayment(req.params.id, req.tenantId);
+  res.json({ success: true, data: payment, requestId: req.id });
+};
+
+export const approve = async (req, res) => {
+  const payment = await service.approvePayment(req.params.id, req.tenantId, req.user.sub, req);
+  res.json({ success: true, data: payment, requestId: req.id });
+};
+
+export const reject = async (req, res) => {
+  const { reason } = await rejectPaymentSchema.validateAsync(req.body, { abortEarly: false });
+  const payment = await service.rejectPayment(req.params.id, req.tenantId, req.user.sub, reason, req);
+  res.json({ success: true, data: payment, requestId: req.id });
+};
+
+export const cancel = async (req, res) => {
+  const payment = await service.cancelPayment(req.params.id, req.tenantId, req.user.sub, req);
+  res.json({ success: true, data: payment, requestId: req.id });
+};
