@@ -9,8 +9,8 @@ Type: White-label cross-border payment platform
 Architecture: Node.js ES6 modular monolith
 Current phase: See CURRENT_PHASE below
 
-## CURRENT_PHASE: 5
-## CURRENT_PHASE_NAME: Payments Core + Maker-Checker
+## CURRENT_PHASE: 6
+## CURRENT_PHASE_NAME: KYC + Compliance
 
 ---
 
