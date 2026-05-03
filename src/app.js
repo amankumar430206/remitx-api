@@ -11,6 +11,8 @@ import { tenantsRouter } from './modules/tenants/index.js';
 import { accountsRouter } from './modules/accounts/index.js';
 import { beneficiariesRouter } from './modules/beneficiaries/index.js';
 import { fxRouter } from './modules/fx/index.js';
+import { paymentsRouter } from './modules/payments/index.js';
+import { webhookQueue } from './config/queues.js';
 
 const app = express();
 
@@ -40,6 +42,24 @@ app.use('/api/v1/tenants', tenantsRouter);
 app.use('/api/v1/accounts', accountsRouter);
 app.use('/api/v1/beneficiaries', beneficiariesRouter);
 app.use('/api/v1/fx', fxRouter);
+app.use('/api/v1/payments', paymentsRouter);
+
+// Webhook endpoints — no tenant resolver, no auth (verified by HMAC or dev flag)
+const webhookHandler = (provider) => async (req, res) => {
+  const { eventId, eventType, paymentId, tenantId } = req.body;
+  if (!eventId || !eventType || !paymentId || !tenantId) {
+    return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing required webhook fields' } });
+  }
+  await webhookQueue.add('webhook.process', { provider, eventId, eventType, paymentId, tenantId }, {
+    attempts: 5,
+    backoff: { type: 'exponential', delay: 1000 },
+  });
+  res.json({ success: true });
+};
+
+app.post('/webhooks/zoqq', webhookHandler('zoqq'));
+app.post('/webhooks/cloudcurrency', webhookHandler('cloudcurrency'));
+app.post('/webhooks/dev', webhookHandler('dev')); // no HMAC, local testing only
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
