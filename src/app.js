@@ -10,6 +10,7 @@ import { authRouter } from './modules/auth/index.js';
 import { tenantsRouter } from './modules/tenants/index.js';
 import { accountsRouter } from './modules/accounts/index.js';
 import { beneficiariesRouter } from './modules/beneficiaries/index.js';
+import { fxRouter } from './modules/fx/index.js';
 
 const app = express();
 
@@ -38,6 +39,7 @@ app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/tenants', tenantsRouter);
 app.use('/api/v1/accounts', accountsRouter);
 app.use('/api/v1/beneficiaries', beneficiariesRouter);
+app.use('/api/v1/fx', fxRouter);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
