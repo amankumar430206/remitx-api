@@ -6,7 +6,8 @@ import * as ctrl from './tenants.controller.js';
 const router = Router();
 
 router.get('/config', ctrl.getConfig);
-router.get('/theme', ctrl.getTheme);
+router.get('/theme',  ctrl.getTheme);
+router.put('/theme',  authenticate, authorize('admin:config'), ctrl.updateTheme);
 router.get('/webhook-config', authenticate, authorize('admin:config'), ctrl.getWebhookConfig);
 router.put('/webhook-config', authenticate, authorize('admin:config'), ctrl.updateWebhookConfig);
 

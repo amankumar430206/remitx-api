@@ -48,6 +48,11 @@ export const updateWebhookConfig = async (req, res) => {
   res.json({ success: true, data });
 };
 
+export const updateTheme = async (req, res) => {
+  const data = await service.updateTheme(req.user.tenantId, req.body);
+  res.json({ success: true, data });
+};
+
 // ─── Users ────────────────────────────────────────────────────────────────────
 
 export const inviteUser = async (req, res) => {

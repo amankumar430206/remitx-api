@@ -78,6 +78,34 @@ export const updateWebhookConfig = async (tenantId, { webhookUrl, webhookSecret,
   };
 };
 
+// ─── Theme (client_admin update) ──────────────────────────────────────────────
+
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+const ALLOWED_FONTS = ['Inter', 'Roboto', 'Lato', 'Open Sans', 'Poppins', 'Montserrat'];
+
+export const updateTheme = async (tenantId, { primaryColor, secondaryColor, companyName, fontFamily, logoUrl }) => {
+  if (primaryColor !== undefined && !HEX_COLOR.test(primaryColor)) {
+    throw new AppError('VALIDATION_ERROR', 'primaryColor must be a valid hex color (e.g. #1a56db)', 400);
+  }
+  if (secondaryColor !== undefined && !HEX_COLOR.test(secondaryColor)) {
+    throw new AppError('VALIDATION_ERROR', 'secondaryColor must be a valid hex color', 400);
+  }
+  if (fontFamily !== undefined && !ALLOWED_FONTS.includes(fontFamily)) {
+    throw new AppError('VALIDATION_ERROR', `fontFamily must be one of: ${ALLOWED_FONTS.join(', ')}`, 400);
+  }
+
+  const data = {};
+  if (primaryColor   !== undefined) data.primary_color   = primaryColor;
+  if (secondaryColor !== undefined) data.secondary_color = secondaryColor;
+  if (companyName    !== undefined) data.company_name    = companyName;
+  if (fontFamily     !== undefined) data.font_family     = fontFamily;
+  if (logoUrl        !== undefined) data.logo_url        = logoUrl;
+
+  const row = await repo.upsertWebhookConfig(tenantId, data);
+  const { webhook_secret, ...safe } = row;
+  return safe;
+};
+
 // ─── User management ──────────────────────────────────────────────────────────
 
 export const inviteUser = async (tenantId, { email, role, firstName, lastName }) => {
