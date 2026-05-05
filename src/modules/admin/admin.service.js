@@ -78,6 +78,8 @@ export const listTenantUsers = async (id) => {
 
 // ─── Provider corridor config ─────────────────────────────────────────────────
 
+export const getProviderConfig = async (tenantId) => repo.getCorridorConfigs(tenantId);
+
 export const updateProviderConfig = async (tenantId, corridors, actorId, req) => {
   if (!Array.isArray(corridors)) throw new AppError('VALIDATION_ERROR', 'corridors must be an array', 400);
 

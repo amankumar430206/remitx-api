@@ -19,5 +19,7 @@ router.post('/password/reset', ctrl.passwordReset);
 router.post('/invite/accept', ctrl.acceptInvite);
 
 router.get('/me', authenticate, ctrl.getMe);
+router.put('/me', authenticate, ctrl.updateProfile);
+router.post('/password/change', authenticate, ctrl.changePassword);
 
 export default router;

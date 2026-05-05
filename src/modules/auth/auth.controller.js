@@ -75,3 +75,17 @@ export const getMe = async (req, res) => {
   const user = await service.getMe(req.user.sub, req.tenantId);
   res.json({ success: true, data: user, requestId: req.id });
 };
+
+export const updateProfile = async (req, res) => {
+  const data = await service.updateProfile(req.user.sub, req.user.tenantId, req.body);
+  res.json({ success: true, data, requestId: req.id });
+};
+
+export const changePassword = async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'currentPassword and newPassword are required' } });
+  }
+  await service.changePassword(req.user.sub, req.user.tenantId, currentPassword, newPassword);
+  res.json({ success: true, data: { message: 'Password changed successfully' }, requestId: req.id });
+};

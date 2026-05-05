@@ -16,6 +16,7 @@ router.post('/tenants',                                authenticate, authorize('
 router.get('/tenants/:id',                             authenticate, authorize('tenants:view'),   ctrl.getTenant);
 router.put('/tenants/:id',                             authenticate, authorize('tenants:update'), ctrl.updateTenant);
 router.put('/tenants/:id/status',                      authenticate, authorize('tenants:update'), ctrl.updateTenantStatus);
+router.get('/tenants/:id/provider-config',             authenticate, authorize('tenants:view'),   ctrl.getProviderConfig);
 router.put('/tenants/:id/provider-config',             authenticate, authorize('tenants:update'), ctrl.updateProviderConfig);
 router.get('/tenants/:id/users',                       authenticate, authorize('tenants:view'),   ctrl.listTenantUsers);
 

@@ -5,11 +5,14 @@ import { AppError } from '../errors/AppError.js';
 
 export const authenticate = async (req, res, next) => {
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  // Allow ?token= query param for SSE endpoints (EventSource cannot set headers)
+  const token = authHeader?.startsWith('Bearer ')
+    ? authHeader.slice(7)
+    : req.query.token;
+
+  if (!token) {
     throw new AppError('UNAUTHORIZED', 'Missing authorization token', 401);
   }
-
-  const token = authHeader.slice(7);
 
   let payload;
   try {

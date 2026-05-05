@@ -76,6 +76,11 @@ export const updateTenantStatus = async (req, res) => {
   res.json({ success: true, data });
 };
 
+export const getProviderConfig = async (req, res) => {
+  const data = await service.getProviderConfig(req.params.id);
+  res.json({ success: true, data });
+};
+
 export const updateProviderConfig = async (req, res) => {
   const { error, value } = corridorSchema.validate(req.body.corridors);
   if (error) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: error.message } });

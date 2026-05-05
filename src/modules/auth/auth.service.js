@@ -262,3 +262,28 @@ export const getMe = async (userId, tenantId) => {
   const { password_hash, mfa_secret, ...safeUser } = user;
   return safeUser;
 };
+
+export const updateProfile = async (userId, tenantId, { firstName, lastName }) => {
+  const data = {};
+  if (firstName !== undefined) data.first_name = firstName;
+  if (lastName !== undefined) data.last_name = lastName;
+  if (!Object.keys(data).length) throw new AppError('VALIDATION_ERROR', 'Nothing to update', 400);
+  const [user] = await db('users')
+    .where({ id: userId, tenant_id: tenantId })
+    .update({ ...data, updated_at: new Date() })
+    .returning(['id', 'email', 'first_name', 'last_name', 'role', 'status']);
+  return user;
+};
+
+export const changePassword = async (userId, tenantId, currentPassword, newPassword) => {
+  const user = await db('users').where({ id: userId, tenant_id: tenantId }).first();
+  if (!user) throw new AppError('NOT_FOUND', 'User not found', 404);
+  const valid = await bcrypt.compare(currentPassword, user.password_hash);
+  if (!valid) throw new AppError('AUTH_ERROR', 'Current password is incorrect', 401);
+  if (newPassword.length < 8) throw new AppError('VALIDATION_ERROR', 'Password must be at least 8 characters', 400);
+  const hash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+  await db.transaction(async (trx) => {
+    await trx('users').where({ id: userId, tenant_id: tenantId }).update({ password_hash: hash, updated_at: new Date() });
+    await repo.addPasswordHistory(userId, hash, trx);
+  });
+};
