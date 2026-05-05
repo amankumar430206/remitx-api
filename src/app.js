@@ -15,6 +15,7 @@ import { paymentsRouter } from './modules/payments/index.js';
 import { complianceRouter } from './modules/compliance/index.js';
 import { adminRouter } from './modules/admin/index.js';
 import { notificationsRouter } from './modules/notifications/index.js';
+import { reportingRouter } from './modules/reporting/index.js';
 import { webhookQueue } from './config/queues.js';
 
 const app = express();
@@ -49,6 +50,7 @@ app.use('/api/v1/payments', paymentsRouter);
 app.use('/api/v1/compliance', complianceRouter);
 app.use('/api/v1/admin', adminRouter);
 app.use('/api/v1/notifications', notificationsRouter);
+app.use('/api/v1/reporting', reportingRouter);
 
 // Webhook endpoints — no tenant resolver, no auth (verified by HMAC or dev flag)
 const webhookHandler = (provider) => async (req, res) => {
