@@ -1,5 +1,8 @@
 import * as service from './accounts.service.js';
 import * as validators from './accounts.validators.js';
+import { getSubtreeUserIds } from '../../shared/utils/subtree.js';
+
+const ADMIN_ROLES = new Set(['super_admin', 'client_admin']);
 
 export const provision = async (req, res) => {
   const payload = await validators.provisionAccountSchema.validateAsync(req.body, { abortEarly: false });
@@ -12,7 +15,11 @@ export const provision = async (req, res) => {
 };
 
 export const list = async (req, res) => {
-  const accounts = await service.listAccounts(req.tenantId, req.user.sub);
+  const userIds = ADMIN_ROLES.has(req.user.role)
+    ? null
+    : await getSubtreeUserIds(req.user.sub, req.user.tenantId);
+
+  const accounts = await service.listAccounts(req.tenantId, userIds);
   res.json({ success: true, data: accounts, requestId: req.id });
 };
 

@@ -8,8 +8,11 @@ export const createAccount = async (data, trx = db) => {
 export const findAccountById = async (id, tenantId, trx = db) =>
   trx('accounts').where({ id, tenant_id: tenantId, status: 'active' }).first();
 
-export const listAccounts = async (tenantId, userId, trx = db) =>
-  trx('accounts').where({ tenant_id: tenantId, user_id: userId, status: 'active' }).orderBy('created_at', 'asc');
+export const listAccounts = async (tenantId, userIds, trx = db) => {
+  const q = trx('accounts').where({ tenant_id: tenantId, status: 'active' });
+  if (userIds && userIds.length > 0) q.whereIn('user_id', userIds);
+  return q.orderBy('created_at', 'asc');
+};
 
 export const getLastLedgerEntry = async (accountId, trx = db) =>
   trx('ledger_entries')

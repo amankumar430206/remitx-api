@@ -1,5 +1,8 @@
 import { randomBytes } from 'crypto';
+import { v4 as uuidv4 } from 'uuid';
+import bcrypt from 'bcrypt';
 import { AppError } from '../../shared/errors/AppError.js';
+import redis from '../../config/redis.js';
 import * as repo from './tenants.repository.js';
 
 const DEFAULT_THEME = {
@@ -13,6 +16,21 @@ const DEFAULT_THEME = {
   webhook_url: null,
   webhook_secret: null,
   webhook_enabled: false,
+};
+
+export const ROLE_DEFAULTS = {
+  client_admin:    ['payments:*', 'beneficiaries:*', 'accounts:*', 'users:*', 'subclients:*', 'reports:*', 'admin:config'],
+  maker:           ['payments:create', 'payments:cancel', 'beneficiaries:create', 'accounts:view', 'reports:view'],
+  checker:         ['payments:approve', 'payments:view_all', 'accounts:view', 'reports:view', 'reports:export'],
+  subclient_admin: ['payments:create', 'payments:approve', 'beneficiaries:*', 'accounts:create', 'accounts:view', 'users:invite', 'reports:view'],
+  subclient_user:  ['payments:create', 'beneficiaries:create', 'accounts:view'],
+};
+
+// Seed default role permissions for a tenant (idempotent)
+export const seedRoleDefaults = async (tenantId, trx) => {
+  for (const [role, permissions] of Object.entries(ROLE_DEFAULTS)) {
+    await repo.setRolePermissions(tenantId, role, permissions, trx);
+  }
 };
 
 export const getTenantConfig = async (tenantId) => {
@@ -58,4 +76,124 @@ export const updateWebhookConfig = async (tenantId, { webhookUrl, webhookSecret,
     webhook_enabled: row.webhook_enabled,
     has_secret: !!(row.webhook_secret),
   };
+};
+
+// ─── User management ──────────────────────────────────────────────────────────
+
+export const inviteUser = async (tenantId, { email, role, firstName, lastName }) => {
+  const VALID_ROLES = Object.keys(ROLE_DEFAULTS);
+  if (!VALID_ROLES.includes(role)) {
+    throw new AppError('VALIDATION_ERROR', `role must be one of: ${VALID_ROLES.join(', ')}`, 400);
+  }
+
+  // Placeholder password — user sets real password via invite/accept
+  const passwordHash = await bcrypt.hash(uuidv4(), 10);
+  const user = await repo.createUser({
+    tenant_id: tenantId,
+    email,
+    role,
+    first_name: firstName || null,
+    last_name: lastName || null,
+    password_hash: passwordHash,
+    status: 'invited',
+    kyc_status: 'pending',
+  });
+
+  // Store invite token in Redis (TTL 72h)
+  const token = randomBytes(32).toString('hex');
+  await redis.setex(`invite:${token}`, 72 * 3600, user.id);
+
+  const { password_hash, mfa_secret, ...safe } = user;
+  return { user: safe, inviteToken: token };
+};
+
+export const listUsers = async (tenantId) => repo.listUsers(tenantId);
+
+export const getUserById = async (id, tenantId) => {
+  const user = await repo.findUserById(id, tenantId);
+  if (!user) throw new AppError('NOT_FOUND', 'User not found', 404);
+  return user;
+};
+
+export const updateUserStatus = async (id, tenantId, status) => {
+  const VALID = ['active', 'inactive', 'suspended'];
+  if (!VALID.includes(status)) {
+    throw new AppError('VALIDATION_ERROR', `status must be one of: ${VALID.join(', ')}`, 400);
+  }
+  const user = await repo.updateUserStatus(id, tenantId, status);
+  if (!user) throw new AppError('NOT_FOUND', 'User not found', 404);
+  return user;
+};
+
+export const updateUserPermissions = async (tenantId, userId, { role }) => {
+  const VALID_ROLES = Object.keys(ROLE_DEFAULTS);
+  if (!VALID_ROLES.includes(role)) {
+    throw new AppError('VALIDATION_ERROR', `role must be one of: ${VALID_ROLES.join(', ')}`, 400);
+  }
+  const user = await repo.updateUserRole(userId, tenantId, role);
+  if (!user) throw new AppError('NOT_FOUND', 'User not found', 404);
+
+  // Invalidate permission cache so next login re-fetches
+  await redis.del(`perms:${userId}`);
+  return user;
+};
+
+// ─── Sub-clients ──────────────────────────────────────────────────────────────
+
+export const createSubClient = async (tenantId, parentUserId, { email, role, firstName, lastName }) => {
+  const SUB_ROLES = ['subclient_admin', 'subclient_user'];
+  if (!SUB_ROLES.includes(role)) {
+    throw new AppError('VALIDATION_ERROR', `role must be one of: ${SUB_ROLES.join(', ')}`, 400);
+  }
+
+  const passwordHash = await bcrypt.hash(uuidv4(), 10);
+  const user = await repo.createUser({
+    tenant_id: tenantId,
+    parent_user_id: parentUserId,
+    email,
+    role,
+    first_name: firstName || null,
+    last_name: lastName || null,
+    password_hash: passwordHash,
+    status: 'invited',
+    kyc_status: 'pending',
+  });
+
+  const token = randomBytes(32).toString('hex');
+  await redis.setex(`invite:${token}`, 72 * 3600, user.id);
+
+  const { password_hash, mfa_secret, ...safe } = user;
+  return { user: safe, inviteToken: token };
+};
+
+export const listSubClients = async (tenantId, requestingUserId, role) => {
+  // client_admin sees all sub-clients; others see only their own subtree
+  const parentFilter = role === 'client_admin' ? null : requestingUserId;
+  return repo.listSubClients(tenantId, parentFilter);
+};
+
+export const getSubClientById = async (id, tenantId) => {
+  const user = await repo.findSubClientById(id, tenantId);
+  if (!user) throw new AppError('NOT_FOUND', 'Sub-client not found', 404);
+  return user;
+};
+
+// ─── Roles ────────────────────────────────────────────────────────────────────
+
+export const listRoles = async (tenantId) => repo.listRoles(tenantId);
+
+export const upsertRole = async (tenantId, { role, permissions }) => {
+  if (!role || typeof role !== 'string') {
+    throw new AppError('VALIDATION_ERROR', 'role name is required', 400);
+  }
+  if (!Array.isArray(permissions)) {
+    throw new AppError('VALIDATION_ERROR', 'permissions must be an array', 400);
+  }
+  await repo.setRolePermissions(tenantId, role, permissions);
+
+  // Invalidate permission cache for all users with this role
+  const users = await repo.getUsersWithRole(tenantId, role);
+  await Promise.all(users.map((u) => redis.del(`perms:${u.id}`)));
+
+  return { role, permissions };
 };

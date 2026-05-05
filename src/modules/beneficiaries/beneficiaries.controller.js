@@ -1,5 +1,8 @@
 import * as service from './beneficiaries.service.js';
 import { createBeneficiarySchema, updateBeneficiarySchema } from './beneficiaries.validators.js';
+import { getSubtreeUserIds } from '../../shared/utils/subtree.js';
+
+const ADMIN_ROLES = new Set(['super_admin', 'client_admin']);
 
 export const create = async (req, res) => {
   const payload = await createBeneficiarySchema.validateAsync(req.body, { abortEarly: false });
@@ -10,7 +13,12 @@ export const create = async (req, res) => {
 export const list = async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page || '1', 10));
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '20', 10)));
-  const result = await service.listBeneficiaries(req.tenantId, req.user.sub, { page, limit });
+
+  const userIds = ADMIN_ROLES.has(req.user.role)
+    ? null
+    : await getSubtreeUserIds(req.user.sub, req.user.tenantId);
+
+  const result = await service.listBeneficiaries(req.tenantId, userIds, { page, limit });
   res.json({ success: true, data: result.data, meta: result.meta, requestId: req.id });
 };
 

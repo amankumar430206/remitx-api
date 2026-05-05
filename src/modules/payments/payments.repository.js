@@ -19,9 +19,9 @@ export const update = async (id, tenantId, data, trx = db) => {
   return row;
 };
 
-export const list = async ({ tenantId, userId, status, page, limit }, trx = db) => {
+export const list = async ({ tenantId, userIds, status, page, limit }, trx = db) => {
   const query = trx('payments').where({ tenant_id: tenantId });
-  if (userId) query.andWhere({ user_id: userId });
+  if (userIds && userIds.length > 0) query.whereIn('user_id', userIds);
   if (status) query.andWhere({ status });
   query.orderBy('created_at', 'desc');
 

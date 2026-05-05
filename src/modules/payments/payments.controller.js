@@ -1,5 +1,8 @@
 import * as service from './payments.service.js';
 import { submitPaymentSchema, rejectPaymentSchema } from './payments.validators.js';
+import { getSubtreeUserIds } from '../../shared/utils/subtree.js';
+
+const ADMIN_ROLES = new Set(['super_admin', 'client_admin']);
 
 export const submit = async (req, res) => {
   const payload = await submitPaymentSchema.validateAsync(req.body, { abortEarly: false });
@@ -12,7 +15,13 @@ export const list = async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page || '1', 10));
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '20', 10)));
   const { status } = req.query;
-  const result = await service.listPayments(req.tenantId, req.user.sub, { page, limit, status });
+
+  // Admin roles see the full tenant; others see only their subtree
+  const userIds = ADMIN_ROLES.has(req.user.role)
+    ? null
+    : await getSubtreeUserIds(req.user.sub, req.user.tenantId);
+
+  const result = await service.listPayments(req.tenantId, userIds, { page, limit, status });
   res.json({ success: true, data: result.data, meta: result.meta, requestId: req.id });
 };
 

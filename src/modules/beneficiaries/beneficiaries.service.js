@@ -36,8 +36,8 @@ export const createBeneficiary = async (payload, userId, tenantId) => {
   return row;
 };
 
-export const listBeneficiaries = async (tenantId, userId, { page = 1, limit = 20 } = {}) => {
-  const { data, total } = await repo.list({ tenantId, userId, page, limit });
+export const listBeneficiaries = async (tenantId, userIds, { page = 1, limit = 20 } = {}) => {
+  const { data, total } = await repo.list({ tenantId, userIds, page, limit });
   return {
     data,
     meta: {

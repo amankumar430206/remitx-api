@@ -21,8 +21,8 @@ export const provisionAccount = async ({ currency, userId, tenantId }) => {
   return account;
 };
 
-export const listAccounts = async (tenantId, userId) => {
-  const accounts = await repo.listAccounts(tenantId, userId);
+export const listAccounts = async (tenantId, userIds) => {
+  const accounts = await repo.listAccounts(tenantId, userIds);
 
   return Promise.all(
     accounts.map(async (acc) => {
