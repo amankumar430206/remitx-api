@@ -40,4 +40,10 @@ export const config = {
   fxQuoteTtlSeconds: parseInt(process.env.FX_QUOTE_TTL_SECONDS || '120', 10),
 
   logLevel: process.env.LOG_LEVEL || 'info',
+
+  smtpHost: process.env.SMTP_HOST || '',
+  smtpPort: parseInt(process.env.SMTP_PORT || '587', 10),
+  smtpUser: process.env.SMTP_USER || '',
+  smtpPass: process.env.SMTP_PASS || '',
+  smtpFrom: process.env.SMTP_FROM || '"RemitX" <noreply@remitx.io>',
 };
