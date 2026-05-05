@@ -7,6 +7,7 @@ import { debitAccount, creditAccount, getAccountBalance } from '../accounts/inde
 import { getBeneficiaryOrThrow } from '../beneficiaries/index.js';
 import { consumeFxQuote } from '../fx/index.js';
 import { paymentQueue, notificationQueue } from '../../config/queues.js';
+import { runAmlChecks } from '../compliance/index.js';
 import * as repo from './payments.repository.js';
 import { assertTransition } from './payments.stateMachine.js';
 
@@ -55,10 +56,16 @@ export const submitPayment = async (payload, userId, tenantId, idempotencyKey, r
     throw new AppError('INSUFFICIENT_BALANCE', 'Insufficient account balance', 422);
   }
 
+  // AML screening
+  const amlResult = await runAmlChecks({ sourceAmount: quote.fromAmount, userId }, tenantId);
+  if (amlResult === 'block') {
+    throw new AppError('AML_BLOCKED', 'Payment blocked by compliance screening', 422);
+  }
+
   // Resolve approval rule
   const rule = await repo.resolveApprovalRule(quote.fromAmount, tenantId);
-  const autoApprove = rule.auto_approve === true;
-  const initialStatus = autoApprove ? 'processing' : 'pending_approval';
+  const autoApprove = rule.auto_approve === true && amlResult === 'pass';
+  const initialStatus = amlResult === 'flag' ? 'pending_compliance' : (autoApprove ? 'processing' : 'pending_approval');
 
   const paymentData = {
     tenant_id: tenantId,
@@ -89,7 +96,7 @@ export const submitPayment = async (payload, userId, tenantId, idempotencyKey, r
       status: initialStatus,
       actor_id: userId,
       actor_type: 'user',
-      notes: autoApprove ? 'Auto-approved by rule' : 'Submitted, awaiting approval',
+      notes: amlResult === 'flag' ? 'Flagged by AML screening — pending compliance review' : (autoApprove ? 'Auto-approved by rule' : 'Submitted, awaiting approval'),
     }, trx);
 
     if (autoApprove) {
@@ -105,7 +112,9 @@ export const submitPayment = async (payload, userId, tenantId, idempotencyKey, r
     return p;
   });
 
-  if (autoApprove) {
+  if (amlResult === 'flag') {
+    enqueueNotification('payment.compliance_flagged', { paymentId: payment.id, tenantId });
+  } else if (autoApprove) {
     enqueueDispatch(payment.id, tenantId);
   } else {
     enqueueNotification('payment.approval_required', { paymentId: payment.id, tenantId });

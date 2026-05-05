@@ -12,6 +12,8 @@ import { accountsRouter } from './modules/accounts/index.js';
 import { beneficiariesRouter } from './modules/beneficiaries/index.js';
 import { fxRouter } from './modules/fx/index.js';
 import { paymentsRouter } from './modules/payments/index.js';
+import { complianceRouter } from './modules/compliance/index.js';
+import { adminRouter } from './modules/admin/index.js';
 import { webhookQueue } from './config/queues.js';
 
 const app = express();
@@ -43,6 +45,8 @@ app.use('/api/v1/accounts', accountsRouter);
 app.use('/api/v1/beneficiaries', beneficiariesRouter);
 app.use('/api/v1/fx', fxRouter);
 app.use('/api/v1/payments', paymentsRouter);
+app.use('/api/v1/compliance', complianceRouter);
+app.use('/api/v1/admin', adminRouter);
 
 // Webhook endpoints — no tenant resolver, no auth (verified by HMAC or dev flag)
 const webhookHandler = (provider) => async (req, res) => {

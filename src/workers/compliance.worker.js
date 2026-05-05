@@ -5,25 +5,43 @@ import db from '../config/database.js';
 
 const connection = { url: config.redisUrl };
 
-const processScreening = async (job) => {
-  const { beneficiaryId, tenantId } = job.data;
+const processJob = async (job) => {
+  const { name, data } = job;
 
-  // Phase 3 stub: simulate screening delay then auto-clear
-  await new Promise((resolve) => setTimeout(resolve, 100));
-
-  const [updated] = await db('beneficiaries')
-    .where({ id: beneficiaryId, tenant_id: tenantId })
-    .update({ screening_status: 'clear', updated_at: new Date() })
-    .returning('id');
-
-  if (updated) {
+  // beneficiary.screen — auto-clear for manual MVP
+  if (name === 'beneficiary.screen') {
+    const { beneficiaryId, tenantId } = data;
+    await db('beneficiaries')
+      .where({ id: beneficiaryId, tenant_id: tenantId })
+      .update({ screening_status: 'clear', updated_at: new Date() });
     logger.info({ beneficiaryId, tenantId }, 'Beneficiary screening cleared');
+    return;
   }
+
+  // kyc.submitted — log for admin visibility (notifications handled by notification worker)
+  if (name === 'kyc.submitted') {
+    logger.info({ userId: data.userId, tenantId: data.tenantId }, 'KYC application submitted — awaiting admin review');
+    return;
+  }
+
+  // kyc.approved / kyc.rejected — log outcome
+  if (name === 'kyc.approved' || name === 'kyc.rejected') {
+    logger.info({ userId: data.userId, tenantId: data.tenantId, event: name }, 'KYC status updated');
+    return;
+  }
+
+  // payment.compliance_flagged — log for compliance team
+  if (name === 'payment.compliance_flagged') {
+    logger.info({ paymentId: data.paymentId, tenantId: data.tenantId }, 'Payment flagged by AML — pending compliance review');
+    return;
+  }
+
+  logger.warn({ jobName: name }, 'Unknown compliance job — skipping');
 };
 
 export const complianceWorker = new Worker(
   'compliance-queue',
-  processScreening,
+  processJob,
   { connection, autorun: false },
 );
 

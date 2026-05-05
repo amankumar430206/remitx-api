@@ -4,7 +4,7 @@ const ROLE_DEFAULTS = {
   checker:         ['payments:approve', 'payments:view_all', 'accounts:view', 'reports:view', 'reports:export'],
   subclient_admin: ['payments:create', 'payments:approve', 'beneficiaries:*', 'accounts:create', 'accounts:view', 'users:invite', 'reports:view'],
   subclient_user:  ['payments:create', 'beneficiaries:create', 'accounts:view'],
-  super_admin:     ['payments:*', 'beneficiaries:*', 'accounts:*', 'users:*', 'subclients:*', 'reports:*', 'admin:*', 'tenants:*'],
+  super_admin:     ['payments:*', 'beneficiaries:*', 'accounts:*', 'users:*', 'subclients:*', 'reports:*', 'admin:*', 'tenants:*', 'compliance:*'],
 };
 
 const expandPermissions = (permissions) => {
