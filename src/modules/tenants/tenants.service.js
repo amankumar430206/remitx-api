@@ -225,3 +225,20 @@ export const upsertRole = async (tenantId, { role, permissions }) => {
 
   return { role, permissions };
 };
+
+// ─── Feature flags ────────────────────────────────────────────────────────────
+
+export const getFeatureFlags = async (tenantId) => {
+  const flags = await repo.getFeatureFlags(tenantId);
+  return flags;
+};
+
+export const updateFeatureFlags = async (tenantId, flags) => {
+  if (typeof flags !== 'object' || Array.isArray(flags)) {
+    throw new AppError('VALIDATION_ERROR', 'flags must be a key-value object', 400);
+  }
+  const sanitized = Object.fromEntries(
+    Object.entries(flags).map(([k, v]) => [String(k), Boolean(v)])
+  );
+  return repo.upsertFeatureFlags(tenantId, sanitized);
+};

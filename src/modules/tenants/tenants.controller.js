@@ -115,3 +115,13 @@ export const upsertRole = async (req, res) => {
   const data = await service.upsertRole(req.user.tenantId, value);
   res.status(201).json({ success: true, data });
 };
+
+export const getFeatureFlags = async (req, res) => {
+  const flags = await service.getFeatureFlags(req.tenantId);
+  res.json({ success: true, data: flags });
+};
+
+export const updateFeatureFlags = async (req, res) => {
+  const flags = await service.updateFeatureFlags(req.tenantId, req.body);
+  res.json({ success: true, data: flags });
+};

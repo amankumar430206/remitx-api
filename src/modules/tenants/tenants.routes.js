@@ -27,4 +27,8 @@ router.get('/sub-clients/:id',  authenticate, authorize('subclients:*'), ctrl.ge
 router.post('/roles', authenticate, authorize('admin:config'), ctrl.upsertRole);
 router.get('/roles',  authenticate, authorize('admin:config'), ctrl.listRoles);
 
+// ─── Feature flags ────────────────────────────────────────────────────────────
+router.get('/feature-flags', authenticate, ctrl.getFeatureFlags);
+router.put('/feature-flags', authenticate, authorize('admin:config'), ctrl.updateFeatureFlags);
+
 export default router;

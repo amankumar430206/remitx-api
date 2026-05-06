@@ -9,6 +9,26 @@ export const findTenantBySlug = async (slug, trx = db) =>
 export const findThemeConfig = async (tenantId, trx = db) =>
   trx('tenant_theme_configs').where({ tenant_id: tenantId }).first();
 
+export const getFeatureFlags = async (tenantId, trx = db) => {
+  const row = await trx('tenant_theme_configs').where({ tenant_id: tenantId }).select('feature_flags').first();
+  return row?.feature_flags ?? {};
+};
+
+export const upsertFeatureFlags = async (tenantId, flags, trx = db) => {
+  const existing = await trx('tenant_theme_configs').where({ tenant_id: tenantId }).first();
+  if (existing) {
+    const [row] = await trx('tenant_theme_configs')
+      .where({ tenant_id: tenantId })
+      .update({ feature_flags: JSON.stringify(flags), updated_at: new Date() })
+      .returning('feature_flags');
+    return row.feature_flags;
+  }
+  const [row] = await trx('tenant_theme_configs')
+    .insert({ tenant_id: tenantId, feature_flags: JSON.stringify(flags) })
+    .returning('feature_flags');
+  return row.feature_flags;
+};
+
 export const upsertWebhookConfig = async (tenantId, data, trx = db) => {
   const existing = await trx('tenant_theme_configs').where({ tenant_id: tenantId }).first();
   if (existing) {
