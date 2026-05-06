@@ -24,7 +24,7 @@ export const list = async (req, res) => {
 };
 
 export const getOne = async (req, res) => {
-  const account = await service.getAccount(req.params.id, req.tenantId, req.user.sub);
+  const account = await service.getAccount(req.params.id, req.tenantId, req.user.sub, req.user.role);
   res.json({ success: true, data: account, requestId: req.id });
 };
 

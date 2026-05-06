@@ -32,10 +32,12 @@ export const listAccounts = async (tenantId, userIds) => {
   );
 };
 
-export const getAccount = async (id, tenantId, userId) => {
+const ADMIN_ROLES = new Set(['super_admin', 'client_admin']);
+
+export const getAccount = async (id, tenantId, userId, role = null) => {
   const account = await repo.findAccountById(id, tenantId);
   if (!account) throw new AppError('NOT_FOUND', 'Account not found', 404);
-  if (account.user_id !== userId) throw new AppError('NOT_FOUND', 'Account not found', 404);
+  if (!ADMIN_ROLES.has(role) && account.user_id !== userId) throw new AppError('NOT_FOUND', 'Account not found', 404);
 
   const balance = await getAccountBalance(id, tenantId);
   const recentEntries = await repo.getRecentLedgerEntries(id, tenantId, 20);
