@@ -11,10 +11,11 @@ export const findById = async (id, tenantId, trx = db) =>
 export const findByIdIncludingInactive = async (id, tenantId, trx = db) =>
   trx('beneficiaries').where({ id, tenant_id: tenantId }).first();
 
-export const list = async ({ tenantId, userIds, page, limit }, trx = db) => {
+export const list = async ({ tenantId, userIds, page, limit, search }, trx = db) => {
   const query = trx('beneficiaries')
     .where({ tenant_id: tenantId, is_active: true });
   if (userIds && userIds.length > 0) query.whereIn('user_id', userIds);
+  if (search) query.where(qb => qb.whereILike('name', `%${search}%`).orWhereILike('bank_name', `%${search}%`));
   query.orderBy('created_at', 'desc');
 
   const [{ count }] = await query.clone().clearOrder().count('* as count');

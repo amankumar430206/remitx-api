@@ -38,8 +38,8 @@ export const createBeneficiary = async (payload, userId, tenantId) => {
   return row;
 };
 
-export const listBeneficiaries = async (tenantId, userIds, { page = 1, limit = 20 } = {}) => {
-  const { data, total } = await repo.list({ tenantId, userIds, page, limit });
+export const listBeneficiaries = async (tenantId, userIds, { page = 1, limit = 20, search } = {}) => {
+  const { data, total } = await repo.list({ tenantId, userIds, page, limit, search });
   return {
     data,
     meta: {

@@ -13,12 +13,13 @@ export const create = async (req, res) => {
 export const list = async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page || '1', 10));
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '20', 10)));
+  const search = req.query.search || undefined;
 
   const userIds = ADMIN_ROLES.has(req.user.role)
     ? null
     : await getSubtreeUserIds(req.user.sub, req.user.tenantId);
 
-  const result = await service.listBeneficiaries(req.tenantId, userIds, { page, limit });
+  const result = await service.listBeneficiaries(req.tenantId, userIds, { page, limit, search });
   res.json({ success: true, data: result.data, meta: result.meta, requestId: req.id });
 };
 
