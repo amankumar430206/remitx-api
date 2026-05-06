@@ -30,6 +30,8 @@ const enqueueScreening = (beneficiaryId, tenantId) => {
     .catch(() => {}); // fire-and-forget
 };
 
+const ADMIN_ROLES = new Set(['super_admin', 'client_admin']);
+
 export const createBeneficiary = async (payload, userId, tenantId) => {
   const row = await repo.create(toDbRow(payload, userId, tenantId));
   enqueueScreening(row.id, tenantId);
@@ -50,17 +52,17 @@ export const listBeneficiaries = async (tenantId, userIds, { page = 1, limit = 2
   };
 };
 
-export const getBeneficiary = async (id, tenantId, userId) => {
+export const getBeneficiary = async (id, tenantId, userId, role = null) => {
   const bene = await repo.findById(id, tenantId);
   if (!bene) throw new AppError('NOT_FOUND', 'Beneficiary not found', 404);
-  if (bene.user_id !== userId) throw new AppError('NOT_FOUND', 'Beneficiary not found', 404);
+  if (!ADMIN_ROLES.has(role) && bene.user_id !== userId) throw new AppError('NOT_FOUND', 'Beneficiary not found', 404);
   return bene;
 };
 
-export const updateBeneficiary = async (id, tenantId, userId, payload) => {
+export const updateBeneficiary = async (id, tenantId, userId, payload, role = null) => {
   const existing = await repo.findById(id, tenantId);
   if (!existing) throw new AppError('NOT_FOUND', 'Beneficiary not found', 404);
-  if (existing.user_id !== userId) throw new AppError('NOT_FOUND', 'Beneficiary not found', 404);
+  if (!ADMIN_ROLES.has(role) && existing.user_id !== userId) throw new AppError('NOT_FOUND', 'Beneficiary not found', 404);
 
   const updateData = {};
   if (payload.name !== undefined) updateData.name = payload.name;
@@ -88,10 +90,10 @@ export const updateBeneficiary = async (id, tenantId, userId, payload) => {
   return updated;
 };
 
-export const deleteBeneficiary = async (id, tenantId, userId) => {
+export const deleteBeneficiary = async (id, tenantId, userId, role = null) => {
   const existing = await repo.findById(id, tenantId);
   if (!existing) throw new AppError('NOT_FOUND', 'Beneficiary not found', 404);
-  if (existing.user_id !== userId) throw new AppError('NOT_FOUND', 'Beneficiary not found', 404);
+  if (!ADMIN_ROLES.has(role) && existing.user_id !== userId) throw new AppError('NOT_FOUND', 'Beneficiary not found', 404);
 
   await repo.softDelete(id, tenantId);
   return { success: true };

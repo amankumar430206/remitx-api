@@ -23,17 +23,17 @@ export const list = async (req, res) => {
 };
 
 export const getOne = async (req, res) => {
-  const bene = await service.getBeneficiary(req.params.id, req.tenantId, req.user.sub);
+  const bene = await service.getBeneficiary(req.params.id, req.tenantId, req.user.sub, req.user.role);
   res.json({ success: true, data: bene, requestId: req.id });
 };
 
 export const update = async (req, res) => {
   const payload = await updateBeneficiarySchema.validateAsync(req.body, { abortEarly: false });
-  const bene = await service.updateBeneficiary(req.params.id, req.tenantId, req.user.sub, payload);
+  const bene = await service.updateBeneficiary(req.params.id, req.tenantId, req.user.sub, payload, req.user.role);
   res.json({ success: true, data: bene, requestId: req.id });
 };
 
 export const remove = async (req, res) => {
-  const result = await service.deleteBeneficiary(req.params.id, req.tenantId, req.user.sub);
+  const result = await service.deleteBeneficiary(req.params.id, req.tenantId, req.user.sub, req.user.role);
   res.json({ success: true, data: result, requestId: req.id });
 };
