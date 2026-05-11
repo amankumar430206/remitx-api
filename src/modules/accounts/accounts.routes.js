@@ -10,5 +10,6 @@ router.post('/', authenticate, authorize('accounts:create'), ctrl.provision);
 router.get('/', authenticate, authorize('accounts:view'), ctrl.list);
 router.get('/:id', authenticate, authorize('accounts:view'), validateUUID('id'), ctrl.getOne);
 router.get('/:id/ledger', authenticate, authorize('accounts:view'), validateUUID('id'), ctrl.getLedger);
+router.post('/:id/adjust', authenticate, authorize('accounts:manage'), validateUUID('id'), ctrl.adjust);
 
 export default router;

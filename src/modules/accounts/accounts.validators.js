@@ -12,3 +12,9 @@ export const ledgerQuerySchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(100).default(20),
 });
+
+export const adjustBalanceSchema = Joi.object({
+  type: Joi.string().valid('credit', 'debit').required(),
+  amount: Joi.string().pattern(/^\d+(\.\d{1,8})?$/).required(),
+  description: Joi.string().min(3).max(255).required(),
+});

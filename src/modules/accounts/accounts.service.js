@@ -69,6 +69,22 @@ export const getAccountBalance = async (accountId, tenantId, trx = db) => {
   return last?.balance_after ?? '0.00000000';
 };
 
+export const adjustBalance = async ({ accountId, tenantId, type, amount, description }, trx = db) => {
+  return db.transaction(async (t) => {
+    const account = await repo.findAccountById(accountId, tenantId, t);
+    if (!account) throw new AppError('NOT_FOUND', 'Account not found', 404);
+
+    if (type === 'credit') {
+      await creditAccount({ accountId, amount, tenantId, description }, t);
+    } else {
+      await debitAccount({ accountId, amount, tenantId, description }, t);
+    }
+
+    const balance = await getAccountBalance(accountId, tenantId, t);
+    return { accountId, type, amount, description, balanceAfter: balance };
+  });
+};
+
 export const debitAccount = async ({ accountId, amount, paymentId = null, tenantId, description }, trx) => {
   const last = await repo.getLastLedgerEntryForUpdate(accountId, trx);
   const current = new Big(last?.balance_after ?? 0);

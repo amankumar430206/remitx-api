@@ -28,6 +28,16 @@ export const getOne = async (req, res) => {
   res.json({ success: true, data: account, requestId: req.id });
 };
 
+export const adjust = async (req, res) => {
+  const payload = await validators.adjustBalanceSchema.validateAsync(req.body, { abortEarly: false });
+  const result = await service.adjustBalance({
+    accountId: req.params.id,
+    tenantId: req.tenantId,
+    ...payload,
+  });
+  res.json({ success: true, data: result, requestId: req.id });
+};
+
 export const getLedger = async (req, res) => {
   const query = await validators.ledgerQuerySchema.validateAsync(req.query, { abortEarly: false });
   const result = await service.getLedger(req.params.id, req.tenantId, req.user.sub, query);
