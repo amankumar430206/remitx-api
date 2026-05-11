@@ -7,6 +7,7 @@ import redis from '../../config/redis.js';
 import { config } from '../../config/index.js';
 import { AppError } from '../../shared/errors/AppError.js';
 import { writeAudit } from '../../shared/utils/audit.js';
+import { multiply, divide, isLessThan, isGreaterThan } from '../../shared/utils/money.js';
 import { creditAccount } from '../accounts/index.js';
 import { insertStatusHistory } from '../payments/index.js';
 import { seedRoleDefaults } from '../tenants/index.js';
@@ -74,6 +75,70 @@ export const updateTenantStatus = async (id, status, actorId, req) => {
 export const listTenantUsers = async (id) => {
   await getTenant(id); // ensure exists
   return repo.listTenantUsers(id);
+};
+
+// ─── Fee config ───────────────────────────────────────────────────────────────
+
+const computeFee = (config, amount) => {
+  if (!config) return '0.00000000';
+  if (config.fee_type === 'flat') return String(config.fee_value);
+
+  // percent: fee_value is the rate (e.g. 0.5 means 0.5%)
+  let fee = multiply(String(amount), divide(String(config.fee_value), '100'));
+  if (config.min_fee !== null && isLessThan(fee, String(config.min_fee))) fee = String(config.min_fee);
+  if (config.max_fee !== null && isGreaterThan(fee, String(config.max_fee))) fee = String(config.max_fee);
+  return fee;
+};
+
+export const resolveFee = async (tenantId, sourceCurrency, destCurrency, amount) => {
+  const config = await repo.resolveFeeConfig(tenantId, sourceCurrency, destCurrency);
+  return computeFee(config, amount);
+};
+
+export const listFeeConfigs = async (tenantId) => {
+  await getTenant(tenantId); // ensure tenant exists
+  return repo.listFeeConfigs(tenantId);
+};
+
+export const createFeeConfig = async (tenantId, data, actorId, req) => {
+  await getTenant(tenantId);
+
+  const row = await repo.createFeeConfig({
+    tenant_id: tenantId,
+    source_currency: data.sourceCurrency.toUpperCase(),
+    dest_currency: data.destCurrency ? data.destCurrency.toUpperCase() : null,
+    fee_type: data.feeType,
+    fee_value: data.feeValue,
+    min_fee: data.minFee ?? null,
+    max_fee: data.maxFee ?? null,
+    is_active: true,
+  });
+
+  writeAudit({ tenantId, actorId, action: 'fee_config.created', resourceType: 'fee_config', resourceId: row.id, req });
+  return row;
+};
+
+export const updateFeeConfig = async (tenantId, feeId, data, actorId, req) => {
+  const updates = {};
+  if (data.feeType  !== undefined) updates.fee_type  = data.feeType;
+  if (data.feeValue !== undefined) updates.fee_value  = data.feeValue;
+  if (data.minFee   !== undefined) updates.min_fee    = data.minFee ?? null;
+  if (data.maxFee   !== undefined) updates.max_fee    = data.maxFee ?? null;
+  if (data.isActive !== undefined) updates.is_active  = data.isActive;
+
+  const row = await repo.updateFeeConfig(feeId, tenantId, updates);
+  if (!row) throw new AppError('NOT_FOUND', 'Fee config not found', 404);
+
+  writeAudit({ tenantId, actorId, action: 'fee_config.updated', resourceType: 'fee_config', resourceId: feeId, req });
+  return row;
+};
+
+export const deleteFeeConfig = async (tenantId, feeId, actorId, req) => {
+  const existing = await repo.findFeeConfig(feeId, tenantId);
+  if (!existing) throw new AppError('NOT_FOUND', 'Fee config not found', 404);
+
+  await repo.deleteFeeConfig(feeId, tenantId);
+  writeAudit({ tenantId, actorId, action: 'fee_config.deleted', resourceType: 'fee_config', resourceId: feeId, req });
 };
 
 // ─── Provider corridor config ─────────────────────────────────────────────────

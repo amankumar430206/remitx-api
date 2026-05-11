@@ -8,6 +8,7 @@ import { getBeneficiaryOrThrow } from '../beneficiaries/index.js';
 import { consumeFxQuote } from '../fx/index.js';
 import { paymentQueue, notificationQueue } from '../../config/queues.js';
 import { runAmlChecks } from '../compliance/index.js';
+import { resolveFee } from '../admin/index.js';
 import * as repo from './payments.repository.js';
 import { assertTransition } from './payments.stateMachine.js';
 
@@ -46,7 +47,7 @@ export const submitPayment = async (payload, userId, tenantId, idempotencyKey, r
   const balance = await getAccountBalance(accountId, tenantId);
   if (balance === null) throw new AppError('NOT_FOUND', 'Account not found', 404);
 
-  const feeAmount = '0.00000000';
+  const feeAmount = await resolveFee(tenantId, quote.from, quote.to, quote.fromAmount);
   const totalDebit = add(quote.fromAmount, feeAmount);
 
   if (!isGreaterThan(balance, '0') && !isGreaterThan(balance, totalDebit)) {

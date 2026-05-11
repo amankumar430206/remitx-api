@@ -70,6 +70,50 @@ export const resolveProviderForCorridor = async (tenantId, sourceCurrency, destC
   return null;
 };
 
+// ─── Fee configs ─────────────────────────────────────────────────────────────
+
+export const listFeeConfigs = async (tenantId, trx = db) =>
+  trx('fee_configs')
+    .where({ tenant_id: tenantId })
+    .orderBy([
+      { column: 'source_currency', order: 'asc' },
+      { column: 'dest_currency',   order: 'asc' },
+    ]);
+
+export const findFeeConfig = async (id, tenantId, trx = db) =>
+  trx('fee_configs').where({ id, tenant_id: tenantId }).first();
+
+export const createFeeConfig = async (data, trx = db) => {
+  const [row] = await trx('fee_configs').insert(data).returning('*');
+  return row;
+};
+
+export const updateFeeConfig = async (id, tenantId, data, trx = db) => {
+  const [row] = await trx('fee_configs')
+    .where({ id, tenant_id: tenantId })
+    .update({ ...data, updated_at: new Date() })
+    .returning('*');
+  return row;
+};
+
+export const deleteFeeConfig = async (id, tenantId, trx = db) =>
+  trx('fee_configs').where({ id, tenant_id: tenantId }).delete();
+
+export const resolveFeeConfig = async (tenantId, sourceCurrency, destCurrency, trx = db) => {
+  // 1. Exact corridor match
+  const exact = await trx('fee_configs')
+    .where({ tenant_id: tenantId, source_currency: sourceCurrency, dest_currency: destCurrency, is_active: true })
+    .first();
+  if (exact) return exact;
+
+  // 2. Wildcard (source only, null dest)
+  const wildcard = await trx('fee_configs')
+    .where({ tenant_id: tenantId, source_currency: sourceCurrency, is_active: true })
+    .whereNull('dest_currency')
+    .first();
+  return wildcard ?? null;
+};
+
 // ─── Manual payment queue ─────────────────────────────────────────────────────
 
 export const listManualQueue = async (trx = db) =>
