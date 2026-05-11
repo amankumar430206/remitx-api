@@ -21,25 +21,36 @@ const processDispatch = async (job) => {
     return;
   }
 
-  // ManualAdapter: set to pending_manual_processing
-  const newStatus = 'pending_manual_processing';
+  const isManual = payment.provider_name === 'manual';
+
+  // ManualAdapter = internal approval system: complete immediately after approval.
+  // Real providers go to pending_manual_processing for external settlement tracking.
+  const newStatus = isManual ? 'completed' : 'pending_manual_processing';
   assertTransition(payment.status, newStatus);
 
+  const now = new Date();
   await db.transaction(async (trx) => {
     await trx('payments')
       .where({ id: paymentId, tenant_id: tenantId })
-      .update({ status: newStatus, provider_name: 'manual', provider_payment_id: `MAN-${paymentId}`, updated_at: new Date() });
+      .update({
+        status: newStatus,
+        provider_payment_id: `MAN-${paymentId}`,
+        updated_at: now,
+        ...(isManual && { completed_at: now }),
+      });
 
     await trx('payment_status_history').insert({
       tenant_id: tenantId,
       payment_id: paymentId,
       status: newStatus,
       actor_type: 'system',
-      notes: 'Dispatched to manual processing queue',
+      notes: isManual ? 'Completed via internal manual approval' : 'Dispatched to manual processing queue',
     });
   });
 
-  logger.info({ paymentId, tenantId }, 'Payment dispatched to manual processing');
+  logger.info({ paymentId, tenantId, newStatus }, isManual
+    ? 'Payment auto-completed (manual adapter — internal approval)'
+    : 'Payment dispatched to manual processing queue');
 };
 
 const handlePermanentFailure = async (paymentId, tenantId, errorMsg) => {
