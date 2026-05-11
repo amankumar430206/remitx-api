@@ -15,7 +15,7 @@ export const loginSchema = Joi.object({
 });
 
 export const refreshSchema = Joi.object({
-  token: Joi.string().required(),
+  refreshToken: Joi.string().required(),
 });
 
 export const mfaVerifySchema = Joi.object({

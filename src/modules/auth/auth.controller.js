@@ -13,7 +13,7 @@ export const refresh = async (req, res) => {
   const { error, value } = validators.refreshSchema.validate(req.body);
   if (error) throw error;
 
-  const result = await service.refresh(value.token);
+  const result = await service.refresh(value.refreshToken);
   res.json({ success: true, data: result, requestId: req.id });
 };
 

@@ -71,7 +71,7 @@ export const login = async ({ email, password, mfaCode, tenantId }) => {
         config.jwtPrivateKey,
         { algorithm: 'RS256', expiresIn: '5m' },
       );
-      throw new AppError('MFA_REQUIRED', 'MFA code required', 200, [{ tempToken }]);
+      return { mfaRequired: true, tempToken };
     }
 
     const valid = speakeasy.totp.verify({
