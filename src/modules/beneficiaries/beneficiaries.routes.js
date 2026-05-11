@@ -7,8 +7,8 @@ import * as ctrl from './beneficiaries.controller.js';
 const router = Router();
 
 router.post('/', authenticate, authorize('beneficiaries:create'), ctrl.create);
-router.get('/', authenticate, authorize('beneficiaries:create'), ctrl.list);
-router.get('/:id', authenticate, authorize('beneficiaries:create'), validateUUID('id'), ctrl.getOne);
+router.get('/', authenticate, authorize('beneficiaries:view'), ctrl.list);
+router.get('/:id', authenticate, authorize('beneficiaries:view'), validateUUID('id'), ctrl.getOne);
 router.put('/:id', authenticate, authorize('beneficiaries:create'), validateUUID('id'), ctrl.update);
 router.delete('/:id', authenticate, authorize('beneficiaries:delete'), validateUUID('id'), ctrl.remove);
 

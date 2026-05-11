@@ -1,7 +1,7 @@
 const ROLE_DEFAULTS = {
   client_admin:    ['payments:*', 'beneficiaries:*', 'accounts:*', 'users:*', 'subclients:*', 'reports:*', 'admin:config'],
   maker:           ['payments:create', 'payments:cancel', 'beneficiaries:create', 'accounts:view', 'reports:view'],
-  checker:         ['payments:approve', 'payments:view_all', 'accounts:view', 'reports:view', 'reports:export'],
+  checker:         ['payments:approve', 'payments:view_all', 'accounts:view', 'beneficiaries:view', 'reports:view', 'reports:export'],
   subclient_admin: ['payments:create', 'payments:approve', 'beneficiaries:*', 'accounts:create', 'accounts:view', 'users:invite', 'reports:view'],
   subclient_user:  ['payments:create', 'beneficiaries:create', 'accounts:view'],
   super_admin:     ['payments:*', 'beneficiaries:*', 'accounts:*', 'users:*', 'subclients:*', 'reports:*', 'admin:*', 'tenants:*', 'compliance:*'],
