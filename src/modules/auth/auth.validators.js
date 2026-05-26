@@ -41,4 +41,16 @@ export const inviteAcceptSchema = Joi.object({
   password: passwordStrength,
   firstName: Joi.string().min(1).max(128).required(),
   lastName: Joi.string().min(1).max(128).required(),
+  phone: Joi.string().max(32).optional().allow(''),
+});
+
+export const registerSchema = Joi.object({
+  slug: Joi.string().lowercase().pattern(/^[a-z0-9-]+$/).min(3).max(64).required()
+    .messages({ 'string.pattern.base': 'Slug may only contain lowercase letters, numbers and hyphens' }),
+  companyName: Joi.string().min(2).max(256).required(),
+  email: Joi.string().email().required(),
+  password: passwordStrength,
+  firstName: Joi.string().min(1).max(128).required(),
+  lastName: Joi.string().min(1).max(128).required(),
+  phone: Joi.string().max(32).optional().allow(''),
 });

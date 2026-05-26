@@ -17,6 +17,7 @@ router.post('/password/reset-request', rateLimiter({ max: 3, window: 300 }), ctr
 router.post('/password/reset', ctrl.passwordReset);
 
 router.post('/invite/accept', ctrl.acceptInvite);
+router.post('/register', rateLimiter({ max: 5, window: 300 }), ctrl.register);
 
 router.get('/me', authenticate, ctrl.getMe);
 router.put('/me', authenticate, ctrl.updateProfile);

@@ -9,6 +9,7 @@ import { AppError } from '../../shared/errors/AppError.js';
 import { sha256, randomToken } from '../../shared/utils/crypto.js';
 import { logger } from '../../shared/utils/logger.js';
 import * as repo from './auth.repository.js';
+import { seedRoleDefaults } from '../tenants/index.js';
 
 const BCRYPT_ROUNDS = 12;
 const REFRESH_TTL_DAYS = config.jwtRefreshTtlDays;
@@ -233,7 +234,7 @@ export const passwordReset = async (token, password) => {
   return { success: true };
 };
 
-export const acceptInvite = async ({ token, password, firstName, lastName }) => {
+export const acceptInvite = async ({ token, password, firstName, lastName, phone }) => {
   const userId = await redis.get(`invite:${token}`);
   if (!userId) {
     throw new AppError('INVITE_EXPIRED', 'Invalid or expired invite token', 401);
@@ -241,19 +242,85 @@ export const acceptInvite = async ({ token, password, firstName, lastName }) => 
 
   const newHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
+  let user;
   await db.transaction(async (trx) => {
-    await trx('users').where({ id: userId }).update({
+    const updates = {
       password_hash: newHash,
       first_name: firstName,
       last_name: lastName,
       status: 'active',
       updated_at: new Date(),
-    });
+    };
+    if (phone) updates.phone = phone;
+    await trx('users').where({ id: userId }).update(updates);
     await repo.addPasswordHistory(userId, newHash, trx);
+    user = await trx('users').where({ id: userId }).first();
   });
 
   await redis.del(`invite:${token}`);
-  return { success: true };
+
+  const permissions = await getUserPermissions(user.id, user.tenant_id, user.role);
+  const accessToken = issueAccessToken(user, permissions);
+  const refreshToken = await issueRefreshToken(user.id, user.tenant_id);
+  await repo.updateUserLastLogin(user.id, user.tenant_id);
+
+  const { password_hash, mfa_secret, ...safeUser } = user;
+  return { accessToken, refreshToken, user: safeUser };
+};
+
+export const register = async ({ slug, companyName, email, password, firstName, lastName, phone }) => {
+  const existingTenant = await db('tenants').where({ slug }).first();
+  if (existingTenant) {
+    throw new AppError('CONFLICT', 'This workspace name is already taken', 409);
+  }
+
+  const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+
+  let user;
+  let tenant;
+  await db.transaction(async (trx) => {
+    [tenant] = await trx('tenants')
+      .insert({ slug, name: companyName, status: 'active' })
+      .returning('*');
+
+    await trx('tenant_theme_configs').insert({
+      tenant_id: tenant.id,
+      primary_color: '#1a56db',
+      secondary_color: '#7e3af2',
+      company_name: companyName,
+      font_family: 'Inter',
+      webhook_enabled: false,
+    });
+
+    await seedRoleDefaults(tenant.id, trx);
+
+    [user] = await trx('users')
+      .insert({
+        tenant_id: tenant.id,
+        email,
+        password_hash: passwordHash,
+        first_name: firstName,
+        last_name: lastName,
+        phone: phone || null,
+        role: 'client_admin',
+        kyc_status: 'pending',
+        status: 'active',
+      })
+      .returning('*');
+
+    await trx('user_password_history').insert({
+      user_id: user.id,
+      password_hash: passwordHash,
+      created_at: new Date(),
+    });
+  });
+
+  const permissions = await getUserPermissions(user.id, user.tenant_id, user.role);
+  const accessToken = issueAccessToken(user, permissions);
+  const refreshToken = await issueRefreshToken(user.id, user.tenant_id);
+
+  const { password_hash, mfa_secret, ...safeUser } = user;
+  return { accessToken, refreshToken, user: safeUser, tenant };
 };
 
 export const getMe = async (userId, tenantId) => {

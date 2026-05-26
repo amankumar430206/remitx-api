@@ -71,6 +71,14 @@ export const acceptInvite = async (req, res) => {
   res.json({ success: true, data: result, requestId: req.id });
 };
 
+export const register = async (req, res) => {
+  const { error, value } = validators.registerSchema.validate(req.body);
+  if (error) throw error;
+
+  const result = await service.register(value);
+  res.status(201).json({ success: true, data: result, requestId: req.id });
+};
+
 export const getMe = async (req, res) => {
   const user = await service.getMe(req.user.sub, req.tenantId);
   res.json({ success: true, data: user, requestId: req.id });
