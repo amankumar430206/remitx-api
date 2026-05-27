@@ -43,7 +43,7 @@ export const getKycStatus = async (userId, tenantId) => {
   };
 };
 
-export const uploadKycDocument = async (userId, tenantId, file, req) => {
+export const uploadKycDocument = async (userId, tenantId, file, docType, req) => {
   if (!file) throw new AppError('VALIDATION_ERROR', 'No file uploaded', 400);
 
   const application = await repo.findKycByUser(userId, tenantId);
@@ -54,6 +54,7 @@ export const uploadKycDocument = async (userId, tenantId, file, req) => {
   mkdirSync(uploadDir, { recursive: true });
 
   const docEntry = {
+    type: docType || null,
     filename: file.originalname,
     storedAs: file.filename,
     mimetype: file.mimetype,

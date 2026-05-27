@@ -12,7 +12,7 @@ export const getKycStatus = async (req, res) => {
 };
 
 export const uploadDocument = async (req, res) => {
-  const data = await svc.uploadKycDocument(req.user.sub, req.user.tenantId, req.file, req);
+  const data = await svc.uploadKycDocument(req.user.sub, req.user.tenantId, req.file, req.body.type || null, req);
   res.json({ success: true, data });
 };
 

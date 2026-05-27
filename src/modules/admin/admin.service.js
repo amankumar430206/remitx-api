@@ -77,6 +77,12 @@ export const listTenantUsers = async (id) => {
   return repo.listTenantUsers(id);
 };
 
+export const getTenantContact = async (id) => {
+  await getTenant(id); // ensure exists
+  const contact = await repo.getTenantContact(id);
+  return contact ?? null;
+};
+
 // ─── Fee config ───────────────────────────────────────────────────────────────
 
 const computeFee = (config, amount) => {

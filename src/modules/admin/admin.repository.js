@@ -24,8 +24,22 @@ export const updateTenant = async (id, data, trx = db) => {
 export const listTenantUsers = async (tenantId, trx = db) =>
   trx('users')
     .where({ tenant_id: tenantId })
-    .select('id', 'email', 'first_name', 'last_name', 'role', 'status', 'kyc_status', 'created_at')
+    .select('id', 'email', 'first_name', 'last_name', 'phone', 'role', 'status', 'kyc_status', 'created_at')
     .orderBy('created_at', 'desc');
+
+export const getTenantContact = async (tenantId, trx = db) =>
+  trx('users as u')
+    .leftJoin('kyc_applications as k', function () {
+      this.on('k.user_id', '=', 'u.id').andOn('k.tenant_id', '=', 'u.tenant_id');
+    })
+    .where({ 'u.tenant_id': tenantId, 'u.role': 'client_admin' })
+    .select(
+      'u.id', 'u.email', 'u.first_name', 'u.last_name', 'u.phone',
+      'u.role', 'u.status', 'u.kyc_status', 'u.created_at',
+      'k.id as kyc_id', 'k.status as kyc_app_status',
+      'k.documents as kyc_documents', 'k.reviewed_at', 'k.rejection_reason',
+    )
+    .first();
 
 // ─── Provider corridor configs ────────────────────────────────────────────────
 

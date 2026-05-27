@@ -110,6 +110,11 @@ export const listTenantUsers = async (req, res) => {
   res.json({ success: true, data });
 };
 
+export const getTenantContact = async (req, res) => {
+  const data = await service.getTenantContact(req.params.id);
+  res.json({ success: true, data });
+};
+
 // ─── Fee config ───────────────────────────────────────────────────────────────
 
 export const listFeeConfigs = async (req, res) => {
