@@ -77,6 +77,16 @@ export const listTenantUsers = async (id) => {
   return repo.listTenantUsers(id);
 };
 
+export const listTenantBeneficiaries = async (tenantId) => {
+  await getTenant(tenantId);
+  return repo.listTenantBeneficiaries(tenantId);
+};
+
+export const listTenantAccounts = async (tenantId) => {
+  await getTenant(tenantId);
+  return repo.listTenantAccounts(tenantId);
+};
+
 export const getTenantContact = async (id) => {
   await getTenant(id); // ensure exists
   const contact = await repo.getTenantContact(id);

@@ -54,6 +54,25 @@ export const getTenantContact = async (tenantId, trx = db) =>
     )
     .first();
 
+// ─── Tenant beneficiaries + accounts (for on-behalf flow) ────────────────────
+
+export const listTenantBeneficiaries = async (tenantId, trx = db) =>
+  trx('beneficiaries')
+    .where({ tenant_id: tenantId, is_active: true })
+    .orderBy('name', 'asc');
+
+export const listTenantAccounts = async (tenantId, trx = db) =>
+  trx('accounts as a')
+    .where({ 'a.tenant_id': tenantId, 'a.status': 'active' })
+    .select(
+      'a.*',
+      trx.raw(`COALESCE(
+        (SELECT running_balance FROM ledger_entries WHERE account_id = a.id ORDER BY created_at DESC LIMIT 1),
+        0
+      ) AS balance`),
+    )
+    .orderBy('a.currency', 'asc');
+
 // ─── Provider corridor configs ────────────────────────────────────────────────
 
 export const getCorridorConfigs = async (tenantId, trx = db) =>

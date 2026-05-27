@@ -111,6 +111,16 @@ export const listTenantUsers = async (req, res) => {
   res.json({ success: true, data });
 };
 
+export const listTenantBeneficiaries = async (req, res) => {
+  const data = await service.listTenantBeneficiaries(req.params.id);
+  res.json({ success: true, data });
+};
+
+export const listTenantAccounts = async (req, res) => {
+  const data = await service.listTenantAccounts(req.params.id);
+  res.json({ success: true, data });
+};
+
 export const getTenantContact = async (req, res) => {
   const data = await service.getTenantContact(req.params.id);
   res.json({ success: true, data });
@@ -183,10 +193,12 @@ export const impersonateUser = async (req, res) => {
 const UUID = Joi.string().uuid({ version: 'uuidv4' });
 
 const onBehalfPaymentSchema = Joi.object({
-  targetUserId: UUID.required(),
+  targetUserId:  UUID.required(),
   beneficiaryId: UUID.required(),
   accountId:     UUID.required(),
-  quoteId:       UUID.required(),
+  from:          Joi.string().length(3).uppercase().required(),
+  to:            Joi.string().length(3).uppercase().required(),
+  amount:        Joi.number().positive().required(),
   purposeCode:   Joi.string().valid('TRADE', 'SUPPLIER', 'SALARY', 'SERVICES', 'CONTRACTOR', 'OTHER').required(),
   note:          Joi.string().max(1024).optional().allow('', null),
 });

@@ -5,7 +5,7 @@ import { writeAudit } from '../../shared/utils/audit.js';
 import { add, isGreaterThan } from '../../shared/utils/money.js';
 import { debitAccount, creditAccount, getAccountBalance } from '../accounts/index.js';
 import { getBeneficiaryOrThrow } from '../beneficiaries/index.js';
-import { consumeFxQuote } from '../fx/index.js';
+import { consumeFxQuote, lockQuote } from '../fx/index.js';
 import { paymentQueue, notificationQueue } from '../../config/queues.js';
 import { runAmlChecks } from '../compliance/index.js';
 import { resolveFee } from '../admin/index.js';
@@ -263,12 +263,21 @@ export const cancelPayment = async (paymentId, tenantId, userId, req) => {
 
 // ─── Submit on behalf (admin) ─────────────────────────────────────────────────
 
-export const submitPaymentOnBehalf = async (targetUserId, payload, actorId, req) => {
+export const submitPaymentOnBehalf = async (targetUserId, { beneficiaryId, accountId, from, to, amount, purposeCode, note }, actorId, req) => {
   const targetUser = await db('users').where({ id: targetUserId }).first();
   if (!targetUser) throw new AppError('NOT_FOUND', 'Target user not found', 404);
 
-  const idempotencyKey = `admin-onbehalf-${actorId}-${payload.quoteId}`;
-  const payment = await submitPayment(payload, targetUser.id, targetUser.tenant_id, idempotencyKey, req);
+  // Lock FX quote scoped to the target tenant — consumeFxQuote enforces tenantId match
+  const quote = await lockQuote(targetUser.tenant_id, from.toUpperCase(), to.toUpperCase(), String(amount));
+
+  const idempotencyKey = `admin-onbehalf-${actorId}-${Date.now()}`;
+  const payment = await submitPayment(
+    { beneficiaryId, accountId, quoteId: quote.quoteId, purposeCode, note },
+    targetUser.id,
+    targetUser.tenant_id,
+    idempotencyKey,
+    req,
+  );
 
   writeAudit({ tenantId: targetUser.tenant_id, actorId, action: 'payment.created_on_behalf', resourceType: 'payment', resourceId: payment.id, req });
   return { payment, createdFor: { id: targetUser.id, email: targetUser.email } };

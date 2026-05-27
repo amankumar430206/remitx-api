@@ -20,6 +20,8 @@ router.get('/tenants/:id/provider-config',             authenticate, authorize('
 router.put('/tenants/:id/provider-config',             authenticate, authorize('tenants:update'), ctrl.updateProviderConfig);
 router.get('/tenants/:id/users',                       authenticate, authorize('tenants:view'),   ctrl.listTenantUsers);
 router.get('/tenants/:id/contact',                     authenticate, authorize('tenants:view'),   ctrl.getTenantContact);
+router.get('/tenants/:id/beneficiaries',               authenticate, authorize('tenants:view'),   ctrl.listTenantBeneficiaries);
+router.get('/tenants/:id/accounts',                    authenticate, authorize('tenants:view'),   ctrl.listTenantAccounts);
 router.get('/tenants/:id/fee-config',                  authenticate, authorize('tenants:view'),   ctrl.listFeeConfigs);
 router.post('/tenants/:id/fee-config',                 authenticate, authorize('tenants:update'), ctrl.createFeeConfig);
 router.put('/tenants/:id/fee-config/:feeId',           authenticate, authorize('tenants:update'), ctrl.updateFeeConfig);
