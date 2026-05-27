@@ -3,7 +3,20 @@ import db from '../../config/database.js';
 // ─── Tenants ──────────────────────────────────────────────────────────────────
 
 export const listTenants = async (trx = db) =>
-  trx('tenants').select('*').orderBy('created_at', 'desc');
+  trx('tenants as t')
+    .select(
+      't.*',
+      trx.raw(`(
+        SELECT COUNT(*)::int FROM users u
+        WHERE u.tenant_id = t.id
+      ) AS user_count`),
+      trx.raw(`(
+        SELECT COUNT(*)::int FROM users u
+        WHERE u.tenant_id = t.id
+        AND u.kyc_status = 'submitted'
+      ) AS pending_kyc_count`)
+    )
+    .orderBy('t.created_at', 'desc');
 
 export const findTenantById = async (id, trx = db) =>
   trx('tenants').where({ id }).first();
