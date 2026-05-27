@@ -128,13 +128,14 @@ export const submitPayment = async (payload, userId, tenantId, idempotencyKey, r
 
 // ─── Approve ─────────────────────────────────────────────────────────────────
 
-export const approvePayment = async (paymentId, tenantId, checkerId, req) => {
+export const approvePayment = async (paymentId, tenantId, checkerId, checkerRole, req) => {
   const payment = await repo.findById(paymentId, tenantId);
   if (!payment) throw new AppError('NOT_FOUND', 'Payment not found', 404);
 
   assertTransition(payment.status, 'processing');
 
-  if (payment.user_id === checkerId) {
+  // Super admins may approve their own payments (admin override)
+  if (payment.user_id === checkerId && checkerRole !== 'super_admin') {
     throw new AppError('SELF_APPROVAL', 'Maker cannot approve their own payment', 403);
   }
 
@@ -258,6 +259,19 @@ export const cancelPayment = async (paymentId, tenantId, userId, req) => {
 
   writeAudit({ tenantId, actorId: userId, action: 'payment.cancelled', resourceType: 'payment', resourceId: paymentId, req });
   return updated;
+};
+
+// ─── Submit on behalf (admin) ─────────────────────────────────────────────────
+
+export const submitPaymentOnBehalf = async (targetUserId, payload, actorId, req) => {
+  const targetUser = await db('users').where({ id: targetUserId }).first();
+  if (!targetUser) throw new AppError('NOT_FOUND', 'Target user not found', 404);
+
+  const idempotencyKey = `admin-onbehalf-${actorId}-${payload.quoteId}`;
+  const payment = await submitPayment(payload, targetUser.id, targetUser.tenant_id, idempotencyKey, req);
+
+  writeAudit({ tenantId: targetUser.tenant_id, actorId, action: 'payment.created_on_behalf', resourceType: 'payment', resourceId: payment.id, req });
+  return { payment, createdFor: { id: targetUser.id, email: targetUser.email } };
 };
 
 // ─── Read ─────────────────────────────────────────────────────────────────────

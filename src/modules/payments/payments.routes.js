@@ -20,6 +20,13 @@ router.post(
 router.get('/', authenticate, authorize('payments:create'), ctrl.list);
 
 router.get(
+  '/fee-preview',
+  authenticate,
+  authorize('payments:create'),
+  ctrl.getFeePreview,
+);
+
+router.get(
   '/approval-queue',
   authenticate,
   authorize('payments:approve'),

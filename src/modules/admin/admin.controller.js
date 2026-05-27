@@ -2,6 +2,7 @@ import Joi from 'joi';
 import { listKycQueue, approveKyc, rejectKyc } from '../compliance/index.js';
 import { rejectKycSchema } from '../compliance/compliance.validators.js';
 import * as service from './admin.service.js';
+import { submitPaymentOnBehalf } from '../payments/index.js';
 
 const createTenantSchema = Joi.object({
   slug: Joi.string().pattern(/^[a-z0-9-]+$/).min(2).max(64).required(),
@@ -175,4 +176,25 @@ export const listReconciliationExceptions = async (req, res) => {
 export const impersonateUser = async (req, res) => {
   const data = await service.impersonateUser(req.params.userId, req.user.sub, req.user.tenantId, req);
   res.json({ success: true, data });
+};
+
+// ─── On-behalf payment ────────────────────────────────────────────────────────
+
+const UUID = Joi.string().uuid({ version: 'uuidv4' });
+
+const onBehalfPaymentSchema = Joi.object({
+  targetUserId: UUID.required(),
+  beneficiaryId: UUID.required(),
+  accountId:     UUID.required(),
+  quoteId:       UUID.required(),
+  purposeCode:   Joi.string().valid('TRADE', 'SUPPLIER', 'SALARY', 'SERVICES', 'CONTRACTOR', 'OTHER').required(),
+  note:          Joi.string().max(1024).optional().allow('', null),
+});
+
+export const createPaymentOnBehalf = async (req, res) => {
+  const { error, value } = onBehalfPaymentSchema.validate(req.body);
+  if (error) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: error.message } });
+  const { targetUserId, ...payload } = value;
+  const data = await submitPaymentOnBehalf(targetUserId, payload, req.user.sub, req);
+  res.status(201).json({ success: true, data });
 };

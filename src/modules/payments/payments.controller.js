@@ -1,6 +1,7 @@
 import * as service from './payments.service.js';
 import { submitPaymentSchema, rejectPaymentSchema } from './payments.validators.js';
 import { getSubtreeUserIds } from '../../shared/utils/subtree.js';
+import { previewFee } from '../admin/index.js';
 
 const ADMIN_ROLES = new Set(['super_admin', 'client_admin']);
 
@@ -35,8 +36,21 @@ export const getOne = async (req, res) => {
   res.json({ success: true, data: payment, requestId: req.id });
 };
 
+export const getFeePreview = async (req, res) => {
+  const { from, to, amount } = req.query;
+  if (!from || !to || !amount) {
+    return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'from, to, and amount are required' } });
+  }
+  const numAmount = parseFloat(amount);
+  if (isNaN(numAmount) || numAmount <= 0) {
+    return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'amount must be a positive number' } });
+  }
+  const data = await previewFee(req.tenantId, String(from).toUpperCase(), String(to).toUpperCase(), String(amount));
+  res.json({ success: true, data, requestId: req.id });
+};
+
 export const approve = async (req, res) => {
-  const payment = await service.approvePayment(req.params.id, req.tenantId, req.user.sub, req);
+  const payment = await service.approvePayment(req.params.id, req.tenantId, req.user.sub, req.user.role, req);
   res.json({ success: true, data: payment, requestId: req.id });
 };
 

@@ -36,4 +36,7 @@ router.get('/reconciliation',                          authenticate, authorize('
 // ─── Impersonation ────────────────────────────────────────────────────────────
 router.post('/impersonate/:userId',                    authenticate, authorize('admin:*'),        ctrl.impersonateUser);
 
+// ─── On-behalf payment ────────────────────────────────────────────────────────
+router.post('/payments/on-behalf',                     authenticate, authorize('admin:*'),        ctrl.createPaymentOnBehalf);
+
 export default router;

@@ -101,6 +101,12 @@ export const resolveFee = async (tenantId, sourceCurrency, destCurrency, amount)
   return computeFee(config, amount);
 };
 
+export const previewFee = async (tenantId, sourceCurrency, destCurrency, amount) => {
+  const config = await repo.resolveFeeConfig(tenantId, sourceCurrency, destCurrency);
+  const feeAmount = computeFee(config, amount);
+  return { feeAmount, configured: !!config };
+};
+
 export const listFeeConfigs = async (tenantId) => {
   await getTenant(tenantId); // ensure tenant exists
   return repo.listFeeConfigs(tenantId);
