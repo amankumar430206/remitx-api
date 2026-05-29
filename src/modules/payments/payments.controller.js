@@ -15,14 +15,20 @@ export const submit = async (req, res) => {
 export const list = async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page || '1', 10));
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '20', 10)));
-  const { status } = req.query;
+  const { status, search, from, to } = req.query;
 
   // Admin roles see the full tenant; others see only their subtree
   const userIds = ADMIN_ROLES.has(req.user.role)
     ? null
     : await getSubtreeUserIds(req.user.sub, req.user.tenantId);
 
-  const result = await service.listPayments(req.tenantId, userIds, { page, limit, status });
+  const result = await service.listPayments(req.tenantId, userIds, {
+    page, limit,
+    status: status || undefined,
+    search: search || undefined,
+    from: from || undefined,
+    to: to || undefined,
+  });
   res.json({ success: true, data: result.data, meta: result.meta, requestId: req.id });
 };
 

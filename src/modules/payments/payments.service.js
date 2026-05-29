@@ -292,8 +292,8 @@ export const getPayment = async (paymentId, tenantId) => {
   return { ...payment, statusHistory: history };
 };
 
-export const listPayments = async (tenantId, userIds, { page = 1, limit = 20, status } = {}) => {
-  const { data, total } = await repo.list({ tenantId, userIds, status, page, limit });
+export const listPayments = async (tenantId, userIds, { page = 1, limit = 20, status, search, from, to } = {}) => {
+  const { data, total } = await repo.list({ tenantId, userIds, status, search, from, to, page, limit });
   return {
     data,
     meta: {

@@ -24,22 +24,40 @@ export const update = async (id, tenantId, data, trx = db) => {
   return row;
 };
 
-export const list = async ({ tenantId, userIds, status, page, limit }, trx = db) => {
-  const query = BENE_JOIN(trx('payments')).where({ 'payments.tenant_id': tenantId });
-  if (userIds && userIds.length > 0) query.whereIn('payments.user_id', userIds);
-  if (status) query.andWhere({ 'payments.status': status });
-  query.orderBy('payments.created_at', 'desc');
+export const list = async ({ tenantId, userIds, status, search, from, to, page, limit }, trx = db) => {
+  // Shared filter logic applied to both data and count queries
+  const applyFilters = (q) => {
+    q.where({ 'payments.tenant_id': tenantId });
+    if (userIds?.length) q.whereIn('payments.user_id', userIds);
+    if (status) q.andWhere({ 'payments.status': status });
+    if (search) {
+      const term = `%${search}%`;
+      q.andWhere(sub => sub
+        .whereILike('b.name', term)
+        .orWhereILike('payments.reference', term),
+      );
+    }
+    if (from) q.andWhere('payments.created_at', '>=', new Date(from));
+    if (to) {
+      const toEnd = new Date(to);
+      toEnd.setHours(23, 59, 59, 999);
+      q.andWhere('payments.created_at', '<=', toEnd);
+    }
+  };
 
-  const [{ count }] = await trx('payments')
-    .where({ tenant_id: tenantId })
-    .modify(q => {
-      if (userIds && userIds.length > 0) q.whereIn('user_id', userIds);
-      if (status) q.andWhere({ status });
-    })
-    .count('* as count');
+  // Data query — always has beneficiary join via BENE_JOIN
+  const dataQuery = BENE_JOIN(trx('payments'));
+  applyFilters(dataQuery);
+  dataQuery.orderBy('payments.created_at', 'desc');
+
+  // Count query — add bene join only when search needs it
+  const countQuery = trx('payments');
+  if (search) countQuery.leftJoin('beneficiaries as b', 'payments.beneficiary_id', 'b.id');
+  applyFilters(countQuery);
+  const [{ count }] = await countQuery.count('payments.id as count');
 
   const offset = (page - 1) * limit;
-  const data = await query.limit(limit).offset(offset);
+  const data = await dataQuery.limit(limit).offset(offset);
 
   return { data, total: parseInt(count, 10) };
 };
