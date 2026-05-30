@@ -27,6 +27,10 @@ router.post('/tenants/:id/fee-config',                 authenticate, authorize('
 router.put('/tenants/:id/fee-config/:feeId',           authenticate, authorize('tenants:update'), ctrl.updateFeeConfig);
 router.delete('/tenants/:id/fee-config/:feeId',        authenticate, authorize('tenants:update'), ctrl.deleteFeeConfig);
 
+// ─── Per-client branding ──────────────────────────────────────────────────────
+router.get('/tenants/:id/branding',                    authenticate, authorize('tenants:view'),   ctrl.getClientTheme);
+router.put('/tenants/:id/branding',                    authenticate, authorize('tenants:update'), ctrl.updateClientTheme);
+
 // ─── Manual payment queue ─────────────────────────────────────────────────────
 router.get('/payments/manual-queue',                   authenticate, authorize('admin:*'),        ctrl.getManualQueue);
 router.put('/payments/:id/process',                    authenticate, authorize('admin:*'),        ctrl.processPayment);

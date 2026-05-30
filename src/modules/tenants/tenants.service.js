@@ -40,11 +40,21 @@ export const getTenantConfig = async (tenantId) => {
   return { id, slug, name, status };
 };
 
+// Convert DB snake_case row → camelCase API response shape
+const formatTheme = (row) => ({
+  primaryColor:   row.primary_color   ?? DEFAULT_THEME.primary_color,
+  secondaryColor: row.secondary_color ?? DEFAULT_THEME.secondary_color,
+  logoUrl:        row.logo_url        ?? null,
+  faviconUrl:     row.favicon_url     ?? null,
+  tenantName:     row.company_name    ?? DEFAULT_THEME.company_name,
+  fontFamily:     row.font_family     ?? DEFAULT_THEME.font_family,
+});
+
 export const getTenantTheme = async (tenantId) => {
   const config = await repo.findThemeConfig(tenantId);
-  if (!config) return { ...DEFAULT_THEME, tenant_id: tenantId };
+  if (!config) return formatTheme(DEFAULT_THEME);
   const { webhook_secret, ...safeConfig } = config;
-  return safeConfig;
+  return formatTheme(safeConfig);
 };
 
 export const getWebhookConfig = async (tenantId) => {
@@ -81,7 +91,18 @@ export const updateWebhookConfig = async (tenantId, { webhookUrl, webhookSecret,
 // ─── Theme (client_admin update) ──────────────────────────────────────────────
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
-const ALLOWED_FONTS = ['Inter', 'Roboto', 'Lato', 'Open Sans', 'Poppins', 'Montserrat'];
+const ALLOWED_FONTS = ['Inter', 'DM Sans', 'Geist', 'System UI', 'Roboto', 'Lato', 'Open Sans', 'Poppins', 'Montserrat'];
+
+// Validate and optionally validate logo URL (must be https or data: URI)
+const isValidLogoUrl = (url) => {
+  if (!url) return true;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' || parsed.protocol === 'data:';
+  } catch {
+    return false;
+  }
+};
 
 export const updateTheme = async (tenantId, { primaryColor, secondaryColor, companyName, fontFamily, logoUrl }) => {
   if (primaryColor !== undefined && !HEX_COLOR.test(primaryColor)) {
@@ -93,6 +114,9 @@ export const updateTheme = async (tenantId, { primaryColor, secondaryColor, comp
   if (fontFamily !== undefined && !ALLOWED_FONTS.includes(fontFamily)) {
     throw new AppError('VALIDATION_ERROR', `fontFamily must be one of: ${ALLOWED_FONTS.join(', ')}`, 400);
   }
+  if (logoUrl !== undefined && logoUrl !== null && !isValidLogoUrl(logoUrl)) {
+    throw new AppError('VALIDATION_ERROR', 'logoUrl must be a valid https URL', 400);
+  }
 
   const data = {};
   if (primaryColor   !== undefined) data.primary_color   = primaryColor;
@@ -101,9 +125,9 @@ export const updateTheme = async (tenantId, { primaryColor, secondaryColor, comp
   if (fontFamily     !== undefined) data.font_family     = fontFamily;
   if (logoUrl        !== undefined) data.logo_url        = logoUrl;
 
-  const row = await repo.upsertWebhookConfig(tenantId, data);
+  const row = await repo.upsertThemeConfig(tenantId, data);
   const { webhook_secret, ...safe } = row;
-  return safe;
+  return formatTheme(safe);
 };
 
 // ─── User management ──────────────────────────────────────────────────────────

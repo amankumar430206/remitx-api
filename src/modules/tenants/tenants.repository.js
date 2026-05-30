@@ -29,7 +29,8 @@ export const upsertFeatureFlags = async (tenantId, flags, trx = db) => {
   return row.feature_flags;
 };
 
-export const upsertWebhookConfig = async (tenantId, data, trx = db) => {
+// Generic upsert for the tenant_theme_configs row (used by both theme and webhook updates)
+export const upsertThemeConfig = async (tenantId, data, trx = db) => {
   const existing = await trx('tenant_theme_configs').where({ tenant_id: tenantId }).first();
   if (existing) {
     const [row] = await trx('tenant_theme_configs')
@@ -43,6 +44,9 @@ export const upsertWebhookConfig = async (tenantId, data, trx = db) => {
     .returning('*');
   return row;
 };
+
+// Alias kept for backwards-compatibility (webhook update path uses this)
+export const upsertWebhookConfig = upsertThemeConfig;
 
 // ─── Users ────────────────────────────────────────────────────────────────────
 

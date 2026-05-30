@@ -10,7 +10,7 @@ import { writeAudit } from '../../shared/utils/audit.js';
 import { multiply, divide, isLessThan, isGreaterThan } from '../../shared/utils/money.js';
 import { creditAccount } from '../accounts/index.js';
 import { insertStatusHistory } from '../payments/index.js';
-import { seedRoleDefaults } from '../tenants/index.js';
+import { seedRoleDefaults, getTenantTheme, updateTheme } from '../tenants/index.js';
 import * as repo from './admin.repository.js';
 
 // ─── Tenant management ────────────────────────────────────────────────────────
@@ -248,6 +248,20 @@ export const processPayment = async (paymentId, { action, notes, providerRef }, 
     writeAudit({ tenantId: payment.tenant_id, actorId, action: `payment.${action}d`, resourceType: 'payment', resourceId: paymentId, req });
     return updatedPayment;
   });
+};
+
+// ─── Per-client branding ──────────────────────────────────────────────────────
+
+export const getClientTheme = async (tenantId) => {
+  const tenant = await repo.findTenantById(tenantId);
+  if (!tenant) throw new AppError('NOT_FOUND', 'Tenant not found', 404);
+  return getTenantTheme(tenantId);
+};
+
+export const updateClientTheme = async (tenantId, payload) => {
+  const tenant = await repo.findTenantById(tenantId);
+  if (!tenant) throw new AppError('NOT_FOUND', 'Tenant not found', 404);
+  return updateTheme(tenantId, payload);
 };
 
 // ─── Cross-tenant views ───────────────────────────────────────────────────────

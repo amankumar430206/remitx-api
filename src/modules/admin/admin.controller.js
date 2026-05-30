@@ -210,3 +210,25 @@ export const createPaymentOnBehalf = async (req, res) => {
   const data = await submitPaymentOnBehalf(targetUserId, payload, req.user.sub, req);
   res.status(201).json({ success: true, data });
 };
+
+// ─── Per-client branding ──────────────────────────────────────────────────────
+
+const brandingSchema = Joi.object({
+  primaryColor:   Joi.string().pattern(/^#[0-9a-fA-F]{6}$/).optional(),
+  secondaryColor: Joi.string().pattern(/^#[0-9a-fA-F]{6}$/).optional(),
+  companyName:    Joi.string().max(256).optional().allow('', null),
+  fontFamily:     Joi.string().max(64).optional(),
+  logoUrl:        Joi.string().uri({ scheme: ['https', 'data'] }).optional().allow('', null),
+}).min(1);
+
+export const getClientTheme = async (req, res) => {
+  const data = await service.getClientTheme(req.params.id);
+  res.json({ success: true, data, requestId: req.id });
+};
+
+export const updateClientTheme = async (req, res) => {
+  const { error, value } = brandingSchema.validate(req.body);
+  if (error) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: error.message } });
+  const data = await service.updateClientTheme(req.params.id, value);
+  res.json({ success: true, data, requestId: req.id });
+};
