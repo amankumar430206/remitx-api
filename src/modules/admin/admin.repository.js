@@ -97,6 +97,9 @@ export const upsertCorridorConfig = async (tenantId, { sourceCurrency, destCurre
   return row;
 };
 
+export const deleteCorridorById = async (corridorId, tenantId, trx = db) =>
+  trx('provider_corridor_configs').where({ id: corridorId, tenant_id: tenantId }).delete();
+
 export const resolveProviderForCorridor = async (tenantId, sourceCurrency, destCurrency, trx = db) => {
   // Exact match first
   const exact = await trx('provider_corridor_configs')
@@ -114,6 +117,40 @@ export const resolveProviderForCorridor = async (tenantId, sourceCurrency, destC
   if (wildcard) return wildcard.provider_name;
 
   return null;
+};
+
+// ─── Global (platform) corridor configs ──────────────────────────────────────
+// Uses the RemitX platform tenant (slug='remitx') as the global fallback store.
+
+export const getPlatformTenantId = async (trx = db) => {
+  const t = await trx('tenants').where({ slug: 'remitx' }).select('id').first();
+  return t?.id ?? null;
+};
+
+export const getGlobalCorridorConfigs = async (trx = db) =>
+  trx('provider_corridor_configs as p')
+    .join('tenants as t', 't.id', '=', 'p.tenant_id')
+    .where({ 't.slug': 'remitx' })
+    .select('p.*')
+    .orderBy('p.priority', 'asc');
+
+export const resolveGlobalProviderForCorridor = async (sourceCurrency, destCurrency, trx = db) => {
+  const exact = await trx('provider_corridor_configs as p')
+    .join('tenants as t', 't.id', '=', 'p.tenant_id')
+    .where({ 't.slug': 'remitx', 'p.source_currency': sourceCurrency, 'p.dest_currency': destCurrency, 'p.is_active': true })
+    .orderBy('p.priority', 'asc')
+    .select('p.provider_name')
+    .first();
+  if (exact) return exact.provider_name;
+
+  const wildcard = await trx('provider_corridor_configs as p')
+    .join('tenants as t', 't.id', '=', 'p.tenant_id')
+    .where({ 't.slug': 'remitx', 'p.source_currency': sourceCurrency, 'p.is_active': true })
+    .whereNull('p.dest_currency')
+    .orderBy('p.priority', 'asc')
+    .select('p.provider_name')
+    .first();
+  return wildcard?.provider_name ?? null;
 };
 
 // ─── Fee configs ─────────────────────────────────────────────────────────────
@@ -180,11 +217,14 @@ export const processManualPayment = async (id, tenantId, data, trx = db) => {
 
 // ─── Cross-tenant views ───────────────────────────────────────────────────────
 
-export const listAllPayments = async ({ page, limit, tenantId, status }, trx = db) => {
-  const q = trx('payments');
-  if (tenantId) q.where({ tenant_id: tenantId });
-  if (status)   q.andWhere({ status });
-  q.orderBy('created_at', 'desc');
+export const listAllPayments = async ({ page, limit, tenantId, status, providerName }, trx = db) => {
+  const q = trx('payments as p')
+    .leftJoin('tenants as t', 't.id', '=', 'p.tenant_id')
+    .select('p.*', 't.name as tenant_name', 't.slug as tenant_slug');
+  if (tenantId)    q.where({ 'p.tenant_id': tenantId });
+  if (status)      q.andWhere({ 'p.status': status });
+  if (providerName) q.andWhere({ 'p.provider_name': providerName });
+  q.orderBy('p.created_at', 'desc');
 
   const [{ count }] = await q.clone().clearOrder().count('* as count');
   const data = await q.limit(limit).offset((page - 1) * limit);

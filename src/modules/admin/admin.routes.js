@@ -27,6 +27,15 @@ router.post('/tenants/:id/fee-config',                 authenticate, authorize('
 router.put('/tenants/:id/fee-config/:feeId',           authenticate, authorize('tenants:update'), ctrl.updateFeeConfig);
 router.delete('/tenants/:id/fee-config/:feeId',        authenticate, authorize('tenants:update'), ctrl.deleteFeeConfig);
 
+// ─── Per-tenant corridor CRUD ─────────────────────────────────────────────────
+router.post('/tenants/:id/provider-config',                authenticate, authorize('tenants:update'), ctrl.addTenantCorridor);
+router.delete('/tenants/:id/provider-config/:corridorId',  authenticate, authorize('tenants:update'), ctrl.deleteTenantCorridor);
+
+// ─── Global provider defaults ─────────────────────────────────────────────────
+router.get('/provider-defaults',                           authenticate, authorize('admin:*'),        ctrl.getGlobalProviders);
+router.post('/provider-defaults',                          authenticate, authorize('admin:*'),        ctrl.addGlobalProvider);
+router.delete('/provider-defaults/:corridorId',            authenticate, authorize('admin:*'),        ctrl.deleteGlobalProvider);
+
 // ─── KYC document serving ─────────────────────────────────────────────────────
 router.get('/tenants/:id/kyc/:userId/documents/:storedAs', authenticate, authorize('tenants:view'), ctrl.serveKycDocument);
 

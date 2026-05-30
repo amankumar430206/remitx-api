@@ -9,6 +9,7 @@ import { consumeFxQuote, lockQuote } from '../fx/index.js';
 import { paymentQueue, notificationQueue } from '../../config/queues.js';
 import { runAmlChecks } from '../compliance/index.js';
 import { resolveFee } from '../admin/index.js';
+import { resolveProviderName } from '../../providers/ProviderRouter.js';
 import * as repo from './payments.repository.js';
 import { assertTransition } from './payments.stateMachine.js';
 
@@ -47,7 +48,10 @@ export const submitPayment = async (payload, userId, tenantId, idempotencyKey, r
   const balance = await getAccountBalance(accountId, tenantId);
   if (balance === null) throw new AppError('NOT_FOUND', 'Account not found', 404);
 
-  const feeAmount = await resolveFee(tenantId, quote.from, quote.to, quote.fromAmount);
+  const [feeAmount, providerName] = await Promise.all([
+    resolveFee(tenantId, quote.from, quote.to, quote.fromAmount),
+    resolveProviderName(tenantId, quote.from, quote.to),
+  ]);
   const totalDebit = add(quote.fromAmount, feeAmount);
 
   if (!isGreaterThan(balance, '0') && !isGreaterThan(balance, totalDebit)) {
@@ -83,7 +87,7 @@ export const submitPayment = async (payload, userId, tenantId, idempotencyKey, r
     reference: generateReference(),
     idempotency_key: idempotencyKey,
     quote_id: quoteId,
-    provider_name: 'manual',
+    provider_name: providerName,
     status: initialStatus,
     note: note || null,
   };

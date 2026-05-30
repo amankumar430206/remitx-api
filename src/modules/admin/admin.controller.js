@@ -21,6 +21,13 @@ const corridorSchema = Joi.array().items(Joi.object({
   priority: Joi.number().integer().min(1).optional(),
 })).min(1).required();
 
+const singleCorridorSchema = Joi.object({
+  sourceCurrency: Joi.string().length(3).uppercase().required(),
+  destCurrency: Joi.string().length(3).uppercase().optional().allow(null, ''),
+  providerName: Joi.string().max(64).required(),
+  priority: Joi.number().integer().min(1).optional(),
+});
+
 const processPaymentSchema = Joi.object({
   action: Joi.string().valid('complete', 'fail').required(),
   notes: Joi.string().max(512).optional().allow('', null),
@@ -166,13 +173,46 @@ export const processPayment = async (req, res) => {
   res.json({ success: true, data });
 };
 
+// ─── Per-tenant corridor CRUD ─────────────────────────────────────────────────
+
+export const addTenantCorridor = async (req, res) => {
+  const { error, value } = singleCorridorSchema.validate(req.body);
+  if (error) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: error.message } });
+  const data = await service.addSingleCorridorConfig(req.params.id, value, req.user.sub, req);
+  res.status(201).json({ success: true, data });
+};
+
+export const deleteTenantCorridor = async (req, res) => {
+  await service.removeSingleCorridorConfig(req.params.id, req.params.corridorId, req.user.sub, req);
+  res.json({ success: true, data: null });
+};
+
+// ─── Global provider defaults ─────────────────────────────────────────────────
+
+export const getGlobalProviders = async (req, res) => {
+  const data = await service.getGlobalProviderConfig();
+  res.json({ success: true, data });
+};
+
+export const addGlobalProvider = async (req, res) => {
+  const { error, value } = singleCorridorSchema.validate(req.body);
+  if (error) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: error.message } });
+  const data = await service.addGlobalCorridorConfig(value, req.user.sub, req);
+  res.status(201).json({ success: true, data });
+};
+
+export const deleteGlobalProvider = async (req, res) => {
+  await service.removeGlobalCorridorConfig(req.params.corridorId, req.user.sub, req);
+  res.json({ success: true, data: null });
+};
+
 // ─── Cross-tenant views ───────────────────────────────────────────────────────
 
 export const listAllPayments = async (req, res) => {
   const page  = Math.max(1, parseInt(req.query.page  || '1',  10));
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '20', 10)));
-  const { tenantId, status } = req.query;
-  const result = await service.listAllPayments({ page, limit, tenantId, status });
+  const { tenantId, status, providerName } = req.query;
+  const result = await service.listAllPayments({ page, limit, tenantId, status, providerName });
   res.json({ success: true, data: result.data, meta: result.meta });
 };
 

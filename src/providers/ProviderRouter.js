@@ -2,7 +2,10 @@ import { config } from '../config/index.js';
 import redis from '../config/redis.js';
 import { ManualAdapter } from './manual/ManualAdapter.js';
 import { AppError } from '../shared/errors/AppError.js';
-import { resolveProviderForCorridor } from '../modules/admin/admin.repository.js';
+import {
+  resolveProviderForCorridor,
+  resolveGlobalProviderForCorridor,
+} from '../modules/admin/admin.repository.js';
 
 const registry = new Map([
   ['manual', new ManualAdapter()],
@@ -16,6 +19,33 @@ export const getProvider = (name = config.defaultProvider) => {
   return provider;
 };
 
+/**
+ * Resolves the provider name string for a given tenant + currency corridor.
+ * Resolution order:
+ *   1. Tenant-specific corridor config
+ *   2. Global (platform) corridor config
+ *   3. DEFAULT_PROVIDER env var
+ *   4. 'manual' fallback
+ *
+ * If the resolved name is not in the provider registry (e.g. 'zoqq' not yet
+ * implemented), we gracefully fall back to 'manual' so payments never break.
+ */
+export const resolveProviderName = async (tenantId, sourceCurrency, destCurrency) => {
+  // 1. Tenant-specific
+  let name = await resolveProviderForCorridor(tenantId, sourceCurrency, destCurrency);
+
+  // 2. Global platform defaults
+  if (!name) {
+    name = await resolveGlobalProviderForCorridor(sourceCurrency, destCurrency);
+  }
+
+  // 3. Env default or hard fallback
+  const resolved = name || config.defaultProvider || 'manual';
+
+  // 4. If not in registry, use 'manual' (provider configured but not yet implemented)
+  return registry.has(resolved) ? resolved : 'manual';
+};
+
 export const resolveProvider = async (tenantId, sourceCurrency, destCurrency) => {
   const cacheKey = `tenant:routing:${tenantId}:${sourceCurrency}:${destCurrency || 'any'}`;
   const cached = await redis.get(cacheKey);
@@ -23,9 +53,7 @@ export const resolveProvider = async (tenantId, sourceCurrency, destCurrency) =>
     return registry.get(cached) ?? registry.get(config.defaultProvider) ?? registry.get('manual');
   }
 
-  const providerName = await resolveProviderForCorridor(tenantId, sourceCurrency, destCurrency);
-  const resolved = providerName || config.defaultProvider || 'manual';
-
+  const resolved = await resolveProviderName(tenantId, sourceCurrency, destCurrency);
   await redis.setex(cacheKey, 300, resolved);
 
   return registry.get(resolved) ?? registry.get(config.defaultProvider) ?? registry.get('manual');

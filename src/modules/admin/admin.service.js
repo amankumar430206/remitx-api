@@ -184,6 +184,47 @@ export const updateProviderConfig = async (tenantId, corridors, actorId, req) =>
   return repo.getCorridorConfigs(tenantId);
 };
 
+export const addSingleCorridorConfig = async (tenantId, corridor, actorId, req) => {
+  await getTenant(tenantId);
+  const row = await repo.upsertCorridorConfig(tenantId, corridor);
+  // Invalidate per-corridor routing cache keys for this tenant
+  await redis.del(`tenant:routing:${tenantId}:${corridor.sourceCurrency.toUpperCase()}:${corridor.destCurrency?.toUpperCase() || 'any'}`);
+  await redis.del(`tenant:routing:${tenantId}:${corridor.sourceCurrency.toUpperCase()}:any`);
+  writeAudit({ tenantId, actorId, action: 'provider_config.corridor_added', resourceType: 'tenant', resourceId: tenantId, req });
+  return row;
+};
+
+export const removeSingleCorridorConfig = async (tenantId, corridorId, actorId, req) => {
+  await getTenant(tenantId);
+  const deleted = await repo.deleteCorridorById(corridorId, tenantId);
+  if (!deleted) throw new AppError('NOT_FOUND', 'Corridor not found', 404);
+  // Broad cache bust for this tenant's routing
+  const keys = await redis.keys(`tenant:routing:${tenantId}:*`);
+  if (keys.length) await redis.del(...keys);
+  writeAudit({ tenantId, actorId, action: 'provider_config.corridor_removed', resourceType: 'tenant', resourceId: tenantId, req });
+};
+
+// ─── Global provider defaults ─────────────────────────────────────────────────
+
+export const getGlobalProviderConfig = async () => repo.getGlobalCorridorConfigs();
+
+export const addGlobalCorridorConfig = async (corridor, actorId, req) => {
+  const platformTenantId = await repo.getPlatformTenantId();
+  if (!platformTenantId) throw new AppError('NOT_FOUND', 'Platform tenant not configured', 500);
+  const row = await repo.upsertCorridorConfig(platformTenantId, corridor);
+  // Bust any routing cache that might have used global fallback (can't enumerate, so partial)
+  writeAudit({ tenantId: platformTenantId, actorId, action: 'global_provider_config.corridor_added', resourceType: 'tenant', resourceId: platformTenantId, req });
+  return row;
+};
+
+export const removeGlobalCorridorConfig = async (corridorId, actorId, req) => {
+  const platformTenantId = await repo.getPlatformTenantId();
+  if (!platformTenantId) throw new AppError('NOT_FOUND', 'Platform tenant not configured', 500);
+  const deleted = await repo.deleteCorridorById(corridorId, platformTenantId);
+  if (!deleted) throw new AppError('NOT_FOUND', 'Corridor not found', 404);
+  writeAudit({ tenantId: platformTenantId, actorId, action: 'global_provider_config.corridor_removed', resourceType: 'tenant', resourceId: platformTenantId, req });
+};
+
 // ─── Manual payment queue ─────────────────────────────────────────────────────
 
 export const getManualQueue = async () => repo.listManualQueue();
@@ -275,8 +316,8 @@ export const resetClientTheme = async (tenantId) => {
 
 // ─── Cross-tenant views ───────────────────────────────────────────────────────
 
-export const listAllPayments = async ({ page = 1, limit = 20, tenantId, status }) => {
-  const { data, total } = await repo.listAllPayments({ page, limit, tenantId, status });
+export const listAllPayments = async ({ page = 1, limit = 20, tenantId, status, providerName }) => {
+  const { data, total } = await repo.listAllPayments({ page, limit, tenantId, status, providerName });
   return { data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
 };
 
