@@ -50,11 +50,42 @@ const formatTheme = (row) => ({
   fontFamily:     row.font_family     ?? DEFAULT_THEME.font_family,
 });
 
+// A tenant "has custom theme" when their row exists AND at least one visual
+// field is non-null (i.e. not wiped by a reset).
+const rowHasCustomTheme = (row) =>
+  !!(row && (row.primary_color || row.secondary_color || row.logo_url ||
+             row.company_name  || row.font_family));
+
 export const getTenantTheme = async (tenantId) => {
   const config = await repo.findThemeConfig(tenantId);
-  if (!config) return formatTheme(DEFAULT_THEME);
+
+  if (!rowHasCustomTheme(config)) {
+    // No custom branding — inherit from the global (platform) theme config
+    const globalConfig = await repo.findGlobalThemeConfig();
+    if (globalConfig) {
+      const { webhook_secret, ...safe } = globalConfig;
+      return { ...formatTheme(safe), hasCustomTheme: false };
+    }
+    return { ...formatTheme(DEFAULT_THEME), hasCustomTheme: false };
+  }
+
   const { webhook_secret, ...safeConfig } = config;
-  return formatTheme(safeConfig);
+  return { ...formatTheme(safeConfig), hasCustomTheme: true };
+};
+
+// Returns the platform-wide default theme (the RemitX tenant's branding).
+export const getGlobalTheme = async () => {
+  const globalConfig = await repo.findGlobalThemeConfig();
+  if (!globalConfig) return { ...formatTheme(DEFAULT_THEME), hasCustomTheme: false };
+  const { webhook_secret, ...safe } = globalConfig;
+  return { ...formatTheme(safe), hasCustomTheme: rowHasCustomTheme(globalConfig) };
+};
+
+// Reset a tenant's branding to global inheritance (nulls theme columns).
+export const resetTenantTheme = async (tenantId) => {
+  await repo.resetThemeFields(tenantId);
+  // Return the theme they'll now see (the global fallback)
+  return getTenantTheme(tenantId);
 };
 
 export const getWebhookConfig = async (tenantId) => {

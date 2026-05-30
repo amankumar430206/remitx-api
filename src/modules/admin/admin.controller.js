@@ -221,6 +221,11 @@ const brandingSchema = Joi.object({
   logoUrl:        Joi.string().uri({ scheme: ['https', 'data'] }).optional().allow('', null),
 }).min(1);
 
+export const getGlobalTheme = async (req, res) => {
+  const data = await service.getGlobalThemeForAdmin();
+  res.json({ success: true, data, requestId: req.id });
+};
+
 export const getClientTheme = async (req, res) => {
   const data = await service.getClientTheme(req.params.id);
   res.json({ success: true, data, requestId: req.id });
@@ -230,5 +235,10 @@ export const updateClientTheme = async (req, res) => {
   const { error, value } = brandingSchema.validate(req.body);
   if (error) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: error.message } });
   const data = await service.updateClientTheme(req.params.id, value);
+  res.json({ success: true, data, requestId: req.id });
+};
+
+export const resetClientTheme = async (req, res) => {
+  const data = await service.resetClientTheme(req.params.id);
   res.json({ success: true, data, requestId: req.id });
 };

@@ -48,6 +48,32 @@ export const upsertThemeConfig = async (tenantId, data, trx = db) => {
 // Alias kept for backwards-compatibility (webhook update path uses this)
 export const upsertWebhookConfig = upsertThemeConfig;
 
+// Global (platform) theme config — the RemitX tenant's theme row.
+// Used as the fallback when a client tenant has no custom branding.
+export const findGlobalThemeConfig = async (trx = db) => {
+  const platform = await trx('tenants').where({ slug: 'remitx' }).first();
+  if (!platform) return null;
+  return trx('tenant_theme_configs').where({ tenant_id: platform.id }).first();
+};
+
+// NULL out all theme columns for a tenant (resets to global inheritance).
+// Preserves the row so webhook / feature-flag data is not lost.
+export const resetThemeFields = async (tenantId, trx = db) => {
+  const existing = await trx('tenant_theme_configs').where({ tenant_id: tenantId }).first();
+  if (existing) {
+    await trx('tenant_theme_configs')
+      .where({ tenant_id: tenantId })
+      .update({
+        primary_color:   null,
+        secondary_color: null,
+        logo_url:        null,
+        company_name:    null,
+        font_family:     null,
+        updated_at:      new Date(),
+      });
+  }
+};
+
 // ─── Users ────────────────────────────────────────────────────────────────────
 
 export const createUser = async (data, trx = db) => {
