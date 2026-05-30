@@ -27,6 +27,9 @@ router.post('/tenants/:id/fee-config',                 authenticate, authorize('
 router.put('/tenants/:id/fee-config/:feeId',           authenticate, authorize('tenants:update'), ctrl.updateFeeConfig);
 router.delete('/tenants/:id/fee-config/:feeId',        authenticate, authorize('tenants:update'), ctrl.deleteFeeConfig);
 
+// ─── KYC document serving ─────────────────────────────────────────────────────
+router.get('/tenants/:id/kyc/:userId/documents/:storedAs', authenticate, authorize('tenants:view'), ctrl.serveKycDocument);
+
 // ─── Per-client branding ──────────────────────────────────────────────────────
 router.get('/global-theme',                            authenticate, authorize('tenants:view'),   ctrl.getGlobalTheme);
 router.get('/tenants/:id/branding',                    authenticate, authorize('tenants:view'),   ctrl.getClientTheme);

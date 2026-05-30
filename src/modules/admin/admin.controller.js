@@ -211,6 +211,18 @@ export const createPaymentOnBehalf = async (req, res) => {
   res.status(201).json({ success: true, data });
 };
 
+// ─── KYC document serving ─────────────────────────────────────────────────────
+
+export const serveKycDocument = async (req, res) => {
+  const { filePath, filename, mimetype } = await service.adminGetKycDocumentFile(
+    req.params.id, req.params.userId, req.params.storedAs,
+  );
+  const inline = req.query.inline !== 'false';
+  res.setHeader('Content-Type', mimetype);
+  res.setHeader('Content-Disposition', inline ? 'inline' : `attachment; filename="${filename}"`);
+  res.sendFile(filePath);
+};
+
 // ─── Per-client branding ──────────────────────────────────────────────────────
 
 const brandingSchema = Joi.object({

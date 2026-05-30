@@ -29,6 +29,16 @@ export const clearPayment = async (req, res) => {
   res.json({ success: true, data });
 };
 
+export const serveDocument = async (req, res) => {
+  const { filePath, filename, mimetype } = await svc.getKycDocumentFile(
+    req.user.sub, req.user.tenantId, req.params.storedAs,
+  );
+  const inline = req.query.inline !== 'false';
+  res.setHeader('Content-Type', mimetype);
+  res.setHeader('Content-Disposition', inline ? 'inline' : `attachment; filename="${filename}"`);
+  res.sendFile(filePath);
+};
+
 export const blockPayment = async (req, res) => {
   const { error, value } = blockPaymentSchema.validate(req.body);
   if (error) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: error.message } });

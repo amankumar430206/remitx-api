@@ -1,5 +1,5 @@
 import path from 'path';
-import { mkdirSync } from 'fs';
+import { mkdirSync, existsSync } from 'fs';
 import db from '../../config/database.js';
 import { AppError } from '../../shared/errors/AppError.js';
 import { writeAudit } from '../../shared/utils/audit.js';
@@ -135,6 +135,31 @@ export const blockPayment = async (paymentId, tenantId, actorId, reason, req) =>
 
   writeAudit({ tenantId, actorId, action: 'compliance.payment_blocked', resourceType: 'payment', resourceId: paymentId, req });
   return updated;
+};
+
+// ─── Document file serving ────────────────────────────────────────────────────
+
+/**
+ * Resolve and validate a KYC document for file serving.
+ * `userId` / `tenantId` scope the lookup — works for both self-service
+ * (/compliance/kyc/documents/:storedAs) and admin access (pass target user ID).
+ */
+export const getKycDocumentFile = async (userId, tenantId, storedAs) => {
+  const application = await repo.findKycByUser(userId, tenantId);
+  if (!application) throw new AppError('NOT_FOUND', 'KYC application not found', 404);
+
+  const docs = Array.isArray(application.documents) ? application.documents : [];
+  const doc  = docs.find(d => d.storedAs === storedAs);
+  if (!doc) throw new AppError('NOT_FOUND', 'Document not found', 404);
+
+  const filePath = path.join(process.cwd(), 'uploads', tenantId, userId, storedAs);
+  if (!existsSync(filePath)) throw new AppError('NOT_FOUND', 'File not found on server', 404);
+
+  return {
+    filePath,
+    filename: doc.filename ?? storedAs,
+    mimetype: doc.mimetype ?? 'application/octet-stream',
+  };
 };
 
 // ─── AML checks (called from payments service) ───────────────────────────────

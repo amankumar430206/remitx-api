@@ -29,9 +29,10 @@ const upload = multer({
 
 const router = Router();
 
-router.post('/kyc/initiate', authenticate, ctrl.initiateKyc);
-router.get('/kyc/status', authenticate, ctrl.getKycStatus);
-router.post('/kyc/documents', authenticate, upload.single('document'), ctrl.uploadDocument);
+router.post('/kyc/initiate',                  authenticate, ctrl.initiateKyc);
+router.get('/kyc/status',                     authenticate, ctrl.getKycStatus);
+router.post('/kyc/documents',                 authenticate, upload.single('document'), ctrl.uploadDocument);
+router.get('/kyc/documents/:storedAs',        authenticate, ctrl.serveDocument);
 
 router.get('/queue', authenticate, authorize('compliance:review'), ctrl.listQueue);
 router.put('/:id/clear', authenticate, authorize('compliance:review'), ctrl.clearPayment);

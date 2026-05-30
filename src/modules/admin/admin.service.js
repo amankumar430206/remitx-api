@@ -11,6 +11,7 @@ import { multiply, divide, isLessThan, isGreaterThan } from '../../shared/utils/
 import { creditAccount } from '../accounts/index.js';
 import { insertStatusHistory } from '../payments/index.js';
 import { seedRoleDefaults, getTenantTheme, getGlobalTheme, updateTheme, resetTenantTheme } from '../tenants/index.js';
+import { getKycDocumentFile } from '../compliance/index.js';
 import * as repo from './admin.repository.js';
 
 // ─── Tenant management ────────────────────────────────────────────────────────
@@ -305,4 +306,14 @@ export const impersonateUser = async (targetUserId, actorId, actorTenantId, req)
   writeAudit({ tenantId: actorTenantId, actorId, action: 'user.impersonated', resourceType: 'user', resourceId: targetUserId, req });
 
   return { token, expiresIn: '5m', targetUser: { id: user.id, email: user.email, role: user.role, tenantId: user.tenant_id } };
+};
+
+// ─── KYC document file serving (admin) ───────────────────────────────────────
+
+/** Serve a KYC document file on behalf of an admin viewing a specific tenant user. */
+export const adminGetKycDocumentFile = async (tenantId, userId, storedAs) => {
+  const tenant = await repo.findTenantById(tenantId);
+  if (!tenant) throw new AppError('NOT_FOUND', 'Tenant not found', 404);
+  // Delegate to compliance service — same logic, but admin supplies the target userId
+  return getKycDocumentFile(userId, tenantId, storedAs);
 };
