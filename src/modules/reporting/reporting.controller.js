@@ -10,11 +10,11 @@ export const getStatement = async (req, res) => {
 };
 
 export const getTransactions = async (req, res) => {
-  const { from, to, status, currency, format = 'json' } = req.query;
+  const { from, to, status, direction, currency, format = 'json' } = req.query;
   const page  = parseInt(req.query.page  || '1',  10);
   const limit = parseInt(req.query.limit || '20', 10);
   const result = await svc.getTransactions(
-    { tenantId: req.user.tenantId, userId: req.user.sub, from, to, status, currency, page, limit, format },
+    { tenantId: req.user.tenantId, userId: req.user.sub, from, to, status, direction, currency, page, limit, format },
     res,
   );
   if (result) res.json({ success: true, ...result });

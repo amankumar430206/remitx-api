@@ -296,7 +296,9 @@ export const getPayment = async (paymentId, tenantId) => {
   return { ...payment, statusHistory: history };
 };
 
-export const listPayments = async (tenantId, userIds, { page = 1, limit = 20, status, search, from, to } = {}) => {
+export const listPayments = async (tenantId, userIds, { page = 1, limit = 20, status, direction, search, from, to } = {}) => {
+  // All payments in this system are outgoing debits — credit filter returns empty
+  if (direction === 'credit') return { data: [], meta: { page, limit, total: 0 } };
   const { data, total } = await repo.list({ tenantId, userIds, status, search, from, to, page, limit });
   return {
     data,
