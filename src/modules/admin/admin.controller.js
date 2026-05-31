@@ -211,8 +211,8 @@ export const deleteGlobalProvider = async (req, res) => {
 export const listAllPayments = async (req, res) => {
   const page  = Math.max(1, parseInt(req.query.page  || '1',  10));
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '20', 10)));
-  const { tenantId, status, providerName } = req.query;
-  const result = await service.listAllPayments({ page, limit, tenantId, status, providerName });
+  const { tenantId, status, providerName, from, to } = req.query;
+  const result = await service.listAllPayments({ page, limit, tenantId, status, providerName, from, to });
   res.json({ success: true, data: result.data, meta: result.meta });
 };
 

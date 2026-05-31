@@ -22,9 +22,11 @@ export const list = async (req, res) => {
     const { tenantId, providerName } = req.query;
     const result = await listAllPayments({
       page, limit,
-      tenantId: tenantId || undefined,
-      status: status || undefined,
+      tenantId:     tenantId     || undefined,
+      status:       status       || undefined,
       providerName: providerName || undefined,
+      from:         from         || undefined,
+      to:           to           || undefined,
     });
     return res.json({ success: true, data: result.data, meta: result.meta, requestId: req.id });
   }

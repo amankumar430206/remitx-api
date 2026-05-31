@@ -217,17 +217,38 @@ export const processManualPayment = async (id, tenantId, data, trx = db) => {
 
 // ─── Cross-tenant views ───────────────────────────────────────────────────────
 
-export const listAllPayments = async ({ page, limit, tenantId, status, providerName }, trx = db) => {
-  const q = trx('payments as p')
-    .leftJoin('tenants as t', 't.id', '=', 'p.tenant_id')
-    .select('p.*', 't.name as tenant_name', 't.slug as tenant_slug');
-  if (tenantId)    q.where({ 'p.tenant_id': tenantId });
-  if (status)      q.andWhere({ 'p.status': status });
-  if (providerName) q.andWhere({ 'p.provider_name': providerName });
-  q.orderBy('p.created_at', 'desc');
+export const listAllPayments = async ({ page, limit, tenantId, status, providerName, from, to }, trx = db) => {
+  const applyFilters = (q) => {
+    if (tenantId)     q.where({ 'p.tenant_id': tenantId });
+    if (status)       q.andWhere({ 'p.status': status });
+    if (providerName) q.andWhere({ 'p.provider_name': providerName });
+    if (from)         q.andWhere('p.created_at', '>=', new Date(from));
+    if (to) {
+      const toEnd = new Date(to);
+      toEnd.setHours(23, 59, 59, 999);
+      q.andWhere('p.created_at', '<=', toEnd);
+    }
+  };
 
-  const [{ count }] = await q.clone().clearOrder().count('* as count');
-  const data = await q.limit(limit).offset((page - 1) * limit);
+  // Separate count query — avoids mixing aggregates with SELECT p.* which fails in PostgreSQL
+  const countQuery = trx('payments as p');
+  applyFilters(countQuery);
+  const [{ count }] = await countQuery.count('* as count');
+
+  const dataQuery = trx('payments as p')
+    .leftJoin('tenants as t', 't.id', '=', 'p.tenant_id')
+    .leftJoin('beneficiaries as b', 'p.beneficiary_id', 'b.id')
+    .select(
+      'p.*',
+      't.name as tenant_name',
+      't.slug as tenant_slug',
+      'b.name as beneficiary_name',
+      'b.country_code as beneficiary_country_code',
+    );
+  applyFilters(dataQuery);
+  dataQuery.orderBy('p.created_at', 'desc').limit(limit).offset((page - 1) * limit);
+
+  const data = await dataQuery;
   return { data, total: parseInt(count, 10) };
 };
 
