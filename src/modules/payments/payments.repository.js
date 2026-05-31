@@ -10,8 +10,11 @@ export const create = async (data, trx = db) => {
   return row;
 };
 
-export const findById = async (id, tenantId, trx = db) =>
-  BENE_JOIN(trx('payments')).where({ 'payments.id': id, 'payments.tenant_id': tenantId }).first();
+export const findById = async (id, tenantId, trx = db) => {
+  const q = BENE_JOIN(trx('payments')).where({ 'payments.id': id });
+  if (tenantId) q.andWhere({ 'payments.tenant_id': tenantId });
+  return q.first();
+};
 
 export const findByIdempotencyKey = async (tenantId, idempotencyKey, trx = db) =>
   trx('payments').where({ tenant_id: tenantId, idempotency_key: idempotencyKey }).first();

@@ -231,6 +231,23 @@ export const listAllPayments = async ({ page, limit, tenantId, status, providerN
   return { data, total: parseInt(count, 10) };
 };
 
+export const listApprovalQueueAll = async (tenantId, trx = db) => {
+  const q = trx('payments as p')
+    .leftJoin('beneficiaries as b', 'p.beneficiary_id', 'b.id')
+    .leftJoin('tenants as t', 't.id', '=', 'p.tenant_id')
+    .select(
+      'p.*',
+      'b.name as beneficiary_name',
+      'b.country_code as beneficiary_country_code',
+      't.name as tenant_name',
+      't.slug as tenant_slug',
+    )
+    .whereIn('p.status', ['pending_approval', 'pending_compliance'])
+    .orderBy('p.created_at', 'asc');
+  if (tenantId) q.where({ 'p.tenant_id': tenantId });
+  return q;
+};
+
 export const listAllReconciliationExceptions = async (trx = db) =>
   trx('reconciliation_reports')
     .where({ status: 'exceptions' })

@@ -324,6 +324,9 @@ export const listAllPayments = async ({ page = 1, limit = 20, tenantId, status, 
 export const listReconciliationExceptions = async () =>
   repo.listAllReconciliationExceptions();
 
+export const listApprovalQueueAll = async (tenantId) =>
+  repo.listApprovalQueueAll(tenantId || null);
+
 // ─── Impersonation ────────────────────────────────────────────────────────────
 
 export const impersonateUser = async (targetUserId, actorId, actorTenantId, req) => {

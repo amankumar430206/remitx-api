@@ -136,6 +136,7 @@ export const approvePayment = async (paymentId, tenantId, checkerId, checkerRole
   const payment = await repo.findById(paymentId, tenantId);
   if (!payment) throw new AppError('NOT_FOUND', 'Payment not found', 404);
 
+  const tid = payment.tenant_id;
   assertTransition(payment.status, 'processing');
 
   // Super admins may approve their own payments (admin override)
@@ -143,15 +144,15 @@ export const approvePayment = async (paymentId, tenantId, checkerId, checkerRole
     throw new AppError('SELF_APPROVAL', 'Maker cannot approve their own payment', 403);
   }
 
-  const rule = await repo.resolveApprovalRule(payment.source_amount, tenantId);
+  const rule = await repo.resolveApprovalRule(payment.source_amount, tid);
   const requiredApprovals = rule.required_approvals ?? 1;
 
   // Dual approval: first checker sets checker_id, second finalises
   if (requiredApprovals >= 2 && !payment.checker_id) {
     const updated = await db.transaction(async (trx) => {
-      const p = await repo.update(paymentId, tenantId, { checker_id: checkerId }, trx);
+      const p = await repo.update(paymentId, tid, { checker_id: checkerId }, trx);
       await repo.insertStatusHistory({
-        tenant_id: tenantId,
+        tenant_id: tid,
         payment_id: paymentId,
         status: 'pending_approval',
         actor_id: checkerId,
@@ -160,8 +161,8 @@ export const approvePayment = async (paymentId, tenantId, checkerId, checkerRole
       }, trx);
       return p;
     });
-    enqueueNotification('payment.first_approval', { paymentId, tenantId });
-    writeAudit({ tenantId, actorId: checkerId, action: 'payment.first_approved', resourceType: 'payment', resourceId: paymentId, req });
+    enqueueNotification('payment.first_approval', { paymentId, tenantId: tid });
+    writeAudit({ tenantId: tid, actorId: checkerId, action: 'payment.first_approved', resourceType: 'payment', resourceId: paymentId, req });
     return updated;
   }
 
@@ -177,13 +178,13 @@ export const approvePayment = async (paymentId, tenantId, checkerId, checkerRole
   const totalDebit = add(String(payment.source_amount), String(feeAmount));
 
   const updated = await db.transaction(async (trx) => {
-    const p = await repo.update(paymentId, tenantId, {
+    const p = await repo.update(paymentId, tid, {
       status: 'processing',
       checker_id: checkerId,
     }, trx);
 
     await repo.insertStatusHistory({
-      tenant_id: tenantId,
+      tenant_id: tid,
       payment_id: paymentId,
       status: 'processing',
       actor_id: checkerId,
@@ -195,16 +196,16 @@ export const approvePayment = async (paymentId, tenantId, checkerId, checkerRole
       accountId: payment.account_id,
       amount: totalDebit,
       paymentId,
-      tenantId,
+      tenantId: tid,
       description: `Payment ${payment.reference}`,
     }, trx);
 
     return p;
   });
 
-  enqueueDispatch(paymentId, tenantId);
-  enqueueNotification('payment.approved', { paymentId, tenantId });
-  writeAudit({ tenantId, actorId: checkerId, action: 'payment.approved', resourceType: 'payment', resourceId: paymentId, req });
+  enqueueDispatch(paymentId, tid);
+  enqueueNotification('payment.approved', { paymentId, tenantId: tid });
+  writeAudit({ tenantId: tid, actorId: checkerId, action: 'payment.approved', resourceType: 'payment', resourceId: paymentId, req });
 
   return updated;
 };
@@ -215,12 +216,13 @@ export const rejectPayment = async (paymentId, tenantId, checkerId, reason, req)
   const payment = await repo.findById(paymentId, tenantId);
   if (!payment) throw new AppError('NOT_FOUND', 'Payment not found', 404);
 
+  const tid = payment.tenant_id;
   assertTransition(payment.status, 'rejected');
 
   const updated = await db.transaction(async (trx) => {
-    const p = await repo.update(paymentId, tenantId, { status: 'rejected' }, trx);
+    const p = await repo.update(paymentId, tid, { status: 'rejected' }, trx);
     await repo.insertStatusHistory({
-      tenant_id: tenantId,
+      tenant_id: tid,
       payment_id: paymentId,
       status: 'rejected',
       actor_id: checkerId,
@@ -230,8 +232,8 @@ export const rejectPayment = async (paymentId, tenantId, checkerId, reason, req)
     return p;
   });
 
-  enqueueNotification('payment.rejected', { paymentId, tenantId, reason });
-  writeAudit({ tenantId, actorId: checkerId, action: 'payment.rejected', resourceType: 'payment', resourceId: paymentId, req });
+  enqueueNotification('payment.rejected', { paymentId, tenantId: tid, reason });
+  writeAudit({ tenantId: tid, actorId: checkerId, action: 'payment.rejected', resourceType: 'payment', resourceId: paymentId, req });
 
   return updated;
 };
@@ -292,7 +294,7 @@ export const submitPaymentOnBehalf = async (targetUserId, { beneficiaryId, accou
 export const getPayment = async (paymentId, tenantId) => {
   const payment = await repo.findById(paymentId, tenantId);
   if (!payment) throw new AppError('NOT_FOUND', 'Payment not found', 404);
-  const history = await repo.getStatusHistory(paymentId, tenantId);
+  const history = await repo.getStatusHistory(paymentId, payment.tenant_id);
   return { ...payment, statusHistory: history };
 };
 
