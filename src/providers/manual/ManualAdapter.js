@@ -13,28 +13,11 @@ const INDICATIVE_RATES = {
 export class ManualAdapter extends IPaymentProvider {
   get name() { return 'manual'; }
 
-  async createAccount({ currency, userId, tenantId }) {
-    const ref = `ACC-${randomBytes(4).toString('hex').toUpperCase()}`;
-    return {
-      providerName: 'manual',
-      providerAccountId: ref,
-      accountNumber: ref,
-    };
-  }
-
-  async getFxRate(from, to) {
-    const fromRates = INDICATIVE_RATES[from.toUpperCase()];
-    if (fromRates) {
-      const rate = fromRates[to.toUpperCase()];
-      if (rate) return String(rate);
-    }
-    // Fallback: 1:1
-    return '1.00000000';
-  }
+  // ─── Payment ───────────────────────────────────────────────────────────────
 
   async getQuote({ sourceCurrency, targetCurrency, amount }) {
-    const midRate = await this.getFxRate(sourceCurrency, targetCurrency);
-    const rate = applySpread(midRate, config.defaultFxSpread);
+    const midRate = await this.getLiveRate({ sourceCurrency, targetCurrency });
+    const rate = applySpread(midRate.rate, config.defaultFxSpread);
     return {
       provider: 'manual',
       sourceCurrency,
@@ -60,15 +43,80 @@ export class ManualAdapter extends IPaymentProvider {
     return { externalRef, status: 'cancelled' };
   }
 
+  // ─── Account ───────────────────────────────────────────────────────────────
+
+  async createAccount({ currency, userId, tenantId }) {
+    const ref = `ACC-${randomBytes(4).toString('hex').toUpperCase()}`;
+    return {
+      providerName: 'manual',
+      providerAccountId: ref,
+      accountNumber: ref,
+    };
+  }
+
+  // ─── Tenant / user onboarding ──────────────────────────────────────────────
+  // Manual provider manages everything in-house — no external registration needed.
+
+  async onboardTenant({ tenant }) {
+    return { providerCustomerId: null, status: 'active', metadata: null };
+  }
+
+  async onboardUser({ user, tenant }) {
+    return { providerCustomerId: null, status: 'active', metadata: null };
+  }
+
+  // ─── KYC delegation ────────────────────────────────────────────────────────
+  // Manual KYC is reviewed in-house by compliance officers, not delegated.
+
+  async submitKyc({ user, documents, tenant }) {
+    return { providerKycRef: null, status: 'pending' };
+  }
+
+  async getKycStatus({ providerKycRef }) {
+    return { providerKycRef: null, status: 'pending', verifiedAt: null };
+  }
+
+  // ─── Beneficiary sync ──────────────────────────────────────────────────────
+  // Manual provider has no external counterparty registry.
+
+  async createBeneficiary({ beneficiary, user, tenant }) {
+    return { providerBeneficiaryId: null, status: 'active', metadata: null };
+  }
+
+  async syncBeneficiary({ beneficiary, providerBeneficiaryId, user, tenant }) {
+    return { providerBeneficiaryId: null, status: 'active' };
+  }
+
+  async deleteBeneficiary({ providerBeneficiaryId }) {
+    return { providerBeneficiaryId: null, status: 'deleted' };
+  }
+
+  // ─── FX ────────────────────────────────────────────────────────────────────
+
+  async getLiveRate({ sourceCurrency, targetCurrency }) {
+    const fromRates = INDICATIVE_RATES[sourceCurrency?.toUpperCase()];
+    const rate = fromRates?.[targetCurrency?.toUpperCase()] ?? '1.00000000';
+    return {
+      sourceCurrency,
+      targetCurrency,
+      rate: String(rate),
+      timestamp: new Date(),
+    };
+  }
+
+  // ─── Reconciliation ────────────────────────────────────────────────────────
+
   async getSettlementReport(date) {
     return { date, matched: [], unmatched: [] };
   }
 
-  parseWebhook(headers, body) {
-    return body;
-  }
+  // ─── Webhooks ──────────────────────────────────────────────────────────────
 
   verifyWebhookSignature(headers, rawBody) {
     return true; // Manual adapter has no webhook signing
+  }
+
+  parseWebhook(headers, body) {
+    return body;
   }
 }
