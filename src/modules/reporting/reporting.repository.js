@@ -30,15 +30,30 @@ export const getOpeningBalance = async ({ tenantId, accountId, from }, trx = db)
 // ─── Transactions ─────────────────────────────────────────────────────────────
 
 export const getTransactions = async ({ tenantId, userId, from, to, status, currency, page, limit }, trx = db) => {
-  const q = trx('payments').where({ tenant_id: tenantId });
-  if (userId)   q.andWhere({ user_id: userId });
-  if (status)   q.andWhere({ status });
-  if (currency) q.andWhere('source_currency', currency);
-  if (from)     q.andWhere('created_at', '>=', new Date(from));
-  if (to)       { const toEnd = new Date(to); toEnd.setHours(23, 59, 59, 999); q.andWhere('created_at', '<=', toEnd); }
-  q.orderBy('created_at', 'desc');
+  const q = trx('payments as p')
+    .leftJoin('beneficiaries as b', 'b.id', 'p.beneficiary_id')
+    .where('p.tenant_id', tenantId)
+    .select(
+      'p.id', 'p.reference', 'p.status',
+      'p.source_amount', 'p.source_currency',
+      'p.dest_amount',   'p.dest_currency',
+      'p.exchange_rate', 'p.fee_amount',
+      'p.purpose_code',  'p.provider_name',
+      'p.provider_payment_id',
+      'p.user_id',       'p.beneficiary_id',
+      'p.created_at',    'p.updated_at', 'p.completed_at',
+      'b.name as beneficiary_name',
+      'b.country_code as beneficiary_country',
+    );
 
-  const [{ count }] = await q.clone().clearOrder().count('* as count');
+  if (userId)   q.andWhere('p.user_id', userId);
+  if (status)   q.andWhere('p.status', status);
+  if (currency) q.andWhere('p.source_currency', currency);
+  if (from)     q.andWhere('p.created_at', '>=', new Date(from));
+  if (to)       { const toEnd = new Date(to); toEnd.setHours(23, 59, 59, 999); q.andWhere('p.created_at', '<=', toEnd); }
+  q.orderBy('p.created_at', 'desc');
+
+  const [{ count }] = await q.clone().clearOrder().clearSelect().count('* as count');
   const data = await q.limit(limit).offset((page - 1) * limit);
   return { data, total: parseInt(count, 10) };
 };
