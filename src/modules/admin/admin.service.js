@@ -127,14 +127,15 @@ export const createFeeConfig = async (tenantId, data, actorId, req) => {
   await getTenant(tenantId);
 
   const row = await repo.createFeeConfig({
-    tenant_id: tenantId,
+    tenant_id:      tenantId,
     source_currency: data.sourceCurrency.toUpperCase(),
-    dest_currency: data.destCurrency ? data.destCurrency.toUpperCase() : null,
-    fee_type: data.feeType,
-    fee_value: data.feeValue,
-    min_fee: data.minFee ?? null,
-    max_fee: data.maxFee ?? null,
-    is_active: true,
+    dest_currency:   data.destCurrency ? data.destCurrency.toUpperCase() : null,
+    inherit_global:  data.inheritGlobal ?? false,
+    fee_type:        data.inheritGlobal ? null : data.feeType,
+    fee_value:       data.inheritGlobal ? null : data.feeValue,
+    min_fee:         data.inheritGlobal ? null : (data.minFee ?? null),
+    max_fee:         data.inheritGlobal ? null : (data.maxFee ?? null),
+    is_active:       true,
   });
 
   writeAudit({ tenantId, actorId, action: 'fee_config.created', resourceType: 'fee_config', resourceId: row.id, req });
@@ -143,11 +144,22 @@ export const createFeeConfig = async (tenantId, data, actorId, req) => {
 
 export const updateFeeConfig = async (tenantId, feeId, data, actorId, req) => {
   const updates = {};
-  if (data.feeType  !== undefined) updates.fee_type  = data.feeType;
-  if (data.feeValue !== undefined) updates.fee_value  = data.feeValue;
-  if (data.minFee   !== undefined) updates.min_fee    = data.minFee ?? null;
-  if (data.maxFee   !== undefined) updates.max_fee    = data.maxFee ?? null;
-  if (data.isActive !== undefined) updates.is_active  = data.isActive;
+  if (data.isActive       !== undefined) updates.is_active     = data.isActive;
+  if (data.inheritGlobal  !== undefined) {
+    updates.inherit_global = data.inheritGlobal;
+    if (data.inheritGlobal) {
+      updates.fee_type  = null;
+      updates.fee_value = null;
+      updates.min_fee   = null;
+      updates.max_fee   = null;
+    }
+  }
+  if (!updates.inherit_global) {
+    if (data.feeType  !== undefined) updates.fee_type  = data.feeType;
+    if (data.feeValue !== undefined) updates.fee_value = data.feeValue;
+    if (data.minFee   !== undefined) updates.min_fee   = data.minFee ?? null;
+    if (data.maxFee   !== undefined) updates.max_fee   = data.maxFee ?? null;
+  }
 
   const row = await repo.updateFeeConfig(feeId, tenantId, updates);
   if (!row) throw new AppError('NOT_FOUND', 'Fee config not found', 404);
@@ -162,6 +174,48 @@ export const deleteFeeConfig = async (tenantId, feeId, actorId, req) => {
 
   await repo.deleteFeeConfig(feeId, tenantId);
   writeAudit({ tenantId, actorId, action: 'fee_config.deleted', resourceType: 'fee_config', resourceId: feeId, req });
+};
+
+// ─── Global fee config ────────────────────────────────────────────────────────
+
+export const listGlobalFeeConfigs = async () => repo.listGlobalFeeConfigs();
+
+export const createGlobalFeeConfig = async (data, actorId, req) => {
+  const row = await repo.createGlobalFeeConfig({
+    source_currency: data.sourceCurrency.toUpperCase(),
+    dest_currency:   data.destCurrency ? data.destCurrency.toUpperCase() : null,
+    fee_type:        data.feeType,
+    fee_value:       data.feeValue,
+    min_fee:         data.minFee ?? null,
+    max_fee:         data.maxFee ?? null,
+    is_active:       true,
+  });
+
+  writeAudit({ tenantId: null, actorId, action: 'global_fee_config.created', resourceType: 'global_fee_config', resourceId: row.id, req });
+  return row;
+};
+
+export const updateGlobalFeeConfig = async (feeId, data, actorId, req) => {
+  const updates = {};
+  if (data.feeType  !== undefined) updates.fee_type  = data.feeType;
+  if (data.feeValue !== undefined) updates.fee_value = data.feeValue;
+  if (data.minFee   !== undefined) updates.min_fee   = data.minFee ?? null;
+  if (data.maxFee   !== undefined) updates.max_fee   = data.maxFee ?? null;
+  if (data.isActive !== undefined) updates.is_active = data.isActive;
+
+  const row = await repo.updateGlobalFeeConfig(feeId, updates);
+  if (!row) throw new AppError('NOT_FOUND', 'Global fee config not found', 404);
+
+  writeAudit({ tenantId: null, actorId, action: 'global_fee_config.updated', resourceType: 'global_fee_config', resourceId: feeId, req });
+  return row;
+};
+
+export const deleteGlobalFeeConfig = async (feeId, actorId, req) => {
+  const existing = await repo.findGlobalFeeConfig(feeId);
+  if (!existing) throw new AppError('NOT_FOUND', 'Global fee config not found', 404);
+
+  await repo.deleteGlobalFeeConfig(feeId);
+  writeAudit({ tenantId: null, actorId, action: 'global_fee_config.deleted', resourceType: 'global_fee_config', resourceId: feeId, req });
 };
 
 // ─── Provider corridor config ─────────────────────────────────────────────────

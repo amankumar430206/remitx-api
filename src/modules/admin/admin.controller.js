@@ -41,13 +41,32 @@ const processPaymentSchema = Joi.object({
 const feeConfigSchema = Joi.object({
   sourceCurrency: Joi.string().length(3).uppercase().required(),
   destCurrency:   Joi.string().length(3).uppercase().optional().allow(null),
+  inheritGlobal:  Joi.boolean().optional().default(false),
+  feeType:        Joi.string().valid('flat', 'percent').optional(),
+  feeValue:       Joi.number().positive().optional(),
+  minFee:         Joi.number().min(0).optional().allow(null),
+  maxFee:         Joi.number().positive().optional().allow(null),
+});
+
+const feeConfigUpdateSchema = Joi.object({
+  inheritGlobal: Joi.boolean().optional(),
+  feeType:       Joi.string().valid('flat', 'percent').optional(),
+  feeValue:      Joi.number().positive().optional(),
+  minFee:        Joi.number().min(0).optional().allow(null),
+  maxFee:        Joi.number().positive().optional().allow(null),
+  isActive:      Joi.boolean().optional(),
+}).min(1);
+
+const globalFeeConfigSchema = Joi.object({
+  sourceCurrency: Joi.string().length(3).uppercase().required(),
+  destCurrency:   Joi.string().length(3).uppercase().optional().allow(null),
   feeType:        Joi.string().valid('flat', 'percent').required(),
   feeValue:       Joi.number().positive().required(),
   minFee:         Joi.number().min(0).optional().allow(null),
   maxFee:         Joi.number().positive().optional().allow(null),
 });
 
-const feeConfigUpdateSchema = Joi.object({
+const globalFeeConfigUpdateSchema = Joi.object({
   feeType:  Joi.string().valid('flat', 'percent').optional(),
   feeValue: Joi.number().positive().optional(),
   minFee:   Joi.number().min(0).optional().allow(null),
@@ -147,6 +166,9 @@ export const listFeeConfigs = async (req, res) => {
 export const createFeeConfig = async (req, res) => {
   const { error, value } = feeConfigSchema.validate(req.body);
   if (error) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: error.message } });
+  if (!value.inheritGlobal && (!value.feeType || value.feeValue === undefined)) {
+    return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: '"feeType" and "feeValue" are required when inheritGlobal is false' } });
+  }
   const data = await service.createFeeConfig(req.params.id, value, req.user.sub, req);
   res.status(201).json({ success: true, data });
 };
@@ -160,6 +182,32 @@ export const updateFeeConfig = async (req, res) => {
 
 export const deleteFeeConfig = async (req, res) => {
   await service.deleteFeeConfig(req.params.id, req.params.feeId, req.user.sub, req);
+  res.json({ success: true, data: null });
+};
+
+// ─── Global fee config ────────────────────────────────────────────────────────
+
+export const listGlobalFeeConfigs = async (req, res) => {
+  const data = await service.listGlobalFeeConfigs();
+  res.json({ success: true, data });
+};
+
+export const createGlobalFeeConfig = async (req, res) => {
+  const { error, value } = globalFeeConfigSchema.validate(req.body);
+  if (error) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: error.message } });
+  const data = await service.createGlobalFeeConfig(value, req.user.sub, req);
+  res.status(201).json({ success: true, data });
+};
+
+export const updateGlobalFeeConfig = async (req, res) => {
+  const { error, value } = globalFeeConfigUpdateSchema.validate(req.body);
+  if (error) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: error.message } });
+  const data = await service.updateGlobalFeeConfig(req.params.feeId, value, req.user.sub, req);
+  res.json({ success: true, data });
+};
+
+export const deleteGlobalFeeConfig = async (req, res) => {
+  await service.deleteGlobalFeeConfig(req.params.feeId, req.user.sub, req);
   res.json({ success: true, data: null });
 };
 

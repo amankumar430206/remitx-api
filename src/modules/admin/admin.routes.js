@@ -27,6 +27,12 @@ router.post('/tenants/:id/fee-config',                 authenticate, authorize('
 router.put('/tenants/:id/fee-config/:feeId',           authenticate, authorize('tenants:update'), ctrl.updateFeeConfig);
 router.delete('/tenants/:id/fee-config/:feeId',        authenticate, authorize('tenants:update'), ctrl.deleteFeeConfig);
 
+// ─── Global fee config ────────────────────────────────────────────────────────
+router.get('/fee-config',                              authenticate, authorize('admin:*'),         ctrl.listGlobalFeeConfigs);
+router.post('/fee-config',                             authenticate, authorize('admin:*'),         ctrl.createGlobalFeeConfig);
+router.put('/fee-config/:feeId',                       authenticate, authorize('admin:*'),         ctrl.updateGlobalFeeConfig);
+router.delete('/fee-config/:feeId',                    authenticate, authorize('admin:*'),         ctrl.deleteGlobalFeeConfig);
+
 // ─── Per-tenant default provider ─────────────────────────────────────────────
 router.put('/tenants/:id/default-provider',                authenticate, authorize('tenants:update'), ctrl.setDefaultProvider);
 

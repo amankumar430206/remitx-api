@@ -198,19 +198,60 @@ export const deleteFeeConfig = async (id, tenantId, trx = db) =>
   trx('fee_configs').where({ id, tenant_id: tenantId }).delete();
 
 export const resolveFeeConfig = async (tenantId, sourceCurrency, destCurrency, trx = db) => {
-  // 1. Exact corridor match
+  // 1. Tenant exact corridor match (custom rules only — inherit_global rows excluded)
   const exact = await trx('fee_configs')
-    .where({ tenant_id: tenantId, source_currency: sourceCurrency, dest_currency: destCurrency, is_active: true })
+    .where({ tenant_id: tenantId, source_currency: sourceCurrency, dest_currency: destCurrency, is_active: true, inherit_global: false })
     .first();
   if (exact) return exact;
 
-  // 2. Wildcard (source only, null dest)
+  // 2. Tenant wildcard (custom rules only)
   const wildcard = await trx('fee_configs')
-    .where({ tenant_id: tenantId, source_currency: sourceCurrency, is_active: true })
+    .where({ tenant_id: tenantId, source_currency: sourceCurrency, is_active: true, inherit_global: false })
     .whereNull('dest_currency')
     .first();
-  return wildcard ?? null;
+  if (wildcard) return wildcard;
+
+  // 3. Global exact corridor match
+  const globalExact = await trx('global_fee_configs')
+    .where({ source_currency: sourceCurrency, dest_currency: destCurrency, is_active: true })
+    .first();
+  if (globalExact) return globalExact;
+
+  // 4. Global wildcard
+  const globalWildcard = await trx('global_fee_configs')
+    .where({ source_currency: sourceCurrency, is_active: true })
+    .whereNull('dest_currency')
+    .first();
+  return globalWildcard ?? null;
 };
+
+// ─── Global fee configs ───────────────────────────────────────────────────────
+
+export const listGlobalFeeConfigs = async (trx = db) =>
+  trx('global_fee_configs')
+    .orderBy([
+      { column: 'source_currency', order: 'asc' },
+      { column: 'dest_currency',   order: 'asc' },
+    ]);
+
+export const findGlobalFeeConfig = async (id, trx = db) =>
+  trx('global_fee_configs').where({ id }).first();
+
+export const createGlobalFeeConfig = async (data, trx = db) => {
+  const [row] = await trx('global_fee_configs').insert(data).returning('*');
+  return row;
+};
+
+export const updateGlobalFeeConfig = async (id, data, trx = db) => {
+  const [row] = await trx('global_fee_configs')
+    .where({ id })
+    .update({ ...data, updated_at: new Date() })
+    .returning('*');
+  return row;
+};
+
+export const deleteGlobalFeeConfig = async (id, trx = db) =>
+  trx('global_fee_configs').where({ id }).delete();
 
 // ─── Manual payment queue ─────────────────────────────────────────────────────
 
