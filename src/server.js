@@ -4,11 +4,13 @@ import db from './config/database.js';
 import redis from './config/redis.js';
 import { config } from './config/index.js';
 import { logger } from './shared/utils/logger.js';
+import { startWorkers } from './workers/index.js';
 
 const server = createServer(app);
 
-server.listen(config.port, () => {
+server.listen(config.port, async () => {
   logger.info({ port: config.port, env: config.nodeEnv }, 'RemitX API started');
+  await startWorkers();
 });
 
 const shutdown = async (signal) => {
