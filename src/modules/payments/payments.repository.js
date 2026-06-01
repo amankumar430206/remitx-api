@@ -10,9 +10,37 @@ export const create = async (data, trx = db) => {
   return row;
 };
 
+/** Full detail join — used for single-payment fetches only. */
 export const findById = async (id, tenantId, trx = db) => {
-  const q = BENE_JOIN(trx('payments')).where({ 'payments.id': id });
-  if (tenantId) q.andWhere({ 'payments.tenant_id': tenantId });
+  const q = trx('payments as p')
+    .leftJoin('beneficiaries as b',        'p.beneficiary_id', 'b.id')
+    .leftJoin('users as submitter',        'p.user_id',        'submitter.id')
+    .leftJoin('users as checker_user',     'p.checker_id',     'checker_user.id')
+    .leftJoin('accounts as acct',          'p.account_id',     'acct.id')
+    .select(
+      'p.*',
+      // Beneficiary
+      'b.name             as beneficiary_name',
+      'b.country_code     as beneficiary_country_code',
+      'b.bank_name        as beneficiary_bank_name',
+      'b.account_number   as beneficiary_account_number',
+      'b.iban             as beneficiary_iban',
+      'b.swift_bic        as beneficiary_swift_bic',
+      'b.currency         as beneficiary_currency',
+      // Submitter
+      'submitter.email      as submitter_email',
+      'submitter.first_name as submitter_first_name',
+      'submitter.last_name  as submitter_last_name',
+      // Checker / approver
+      'checker_user.email      as checker_email',
+      'checker_user.first_name as checker_first_name',
+      'checker_user.last_name  as checker_last_name',
+      // Source account
+      'acct.currency       as account_currency',
+      'acct.account_number as account_number_ref',
+    )
+    .where({ 'p.id': id });
+  if (tenantId) q.andWhere({ 'p.tenant_id': tenantId });
   return q.first();
 };
 

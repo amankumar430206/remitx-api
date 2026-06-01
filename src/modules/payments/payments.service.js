@@ -295,7 +295,7 @@ export const getPayment = async (paymentId, tenantId) => {
   const payment = await repo.findById(paymentId, tenantId);
   if (!payment) throw new AppError('NOT_FOUND', 'Payment not found', 404);
   const history = await repo.getStatusHistory(paymentId, payment.tenant_id);
-  return { ...payment, statusHistory: history };
+  return { ...payment, status_history: history };
 };
 
 export const listPayments = async (tenantId, userIds, { page = 1, limit = 20, status, direction, search, from, to } = {}) => {
