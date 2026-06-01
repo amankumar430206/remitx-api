@@ -40,6 +40,6 @@ export const adjust = async (req, res) => {
 
 export const getLedger = async (req, res) => {
   const query = await validators.ledgerQuerySchema.validateAsync(req.query, { abortEarly: false });
-  const result = await service.getLedger(req.params.id, req.tenantId, req.user.sub, query);
+  const result = await service.getLedger(req.params.id, req.tenantId, req.user.sub, query, req.user.role);
   res.json({ success: true, data: result.data, meta: result.meta, requestId: req.id });
 };

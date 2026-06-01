@@ -36,8 +36,8 @@ export const listLedgerEntries = async ({ accountId, tenantId, from, to, limit, 
   const query = trx('ledger_entries')
     .where({ account_id: accountId, tenant_id: tenantId })
     .modify((qb) => {
-      if (from) qb.where('created_at', '>=', from);
-      if (to) qb.where('created_at', '<=', to);
+      if (from) qb.where('created_at', '>=', new Date(from));
+      if (to) { const toEnd = new Date(to); toEnd.setHours(23, 59, 59, 999); qb.where('created_at', '<=', toEnd); }
     })
     .orderBy('created_at', 'desc');
 

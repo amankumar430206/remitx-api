@@ -11,7 +11,7 @@ export const getLedgerEntries = async ({ tenantId, accountId, from, to }, trx = 
 
   if (accountId) q.andWhere('le.account_id', accountId);
   if (from)      q.andWhere('le.created_at', '>=', new Date(from));
-  if (to)        q.andWhere('le.created_at', '<=', new Date(to));
+  if (to)        { const toEnd = new Date(to); toEnd.setHours(23, 59, 59, 999); q.andWhere('le.created_at', '<=', toEnd); }
   return q;
 };
 
@@ -35,7 +35,7 @@ export const getTransactions = async ({ tenantId, userId, from, to, status, curr
   if (status)   q.andWhere({ status });
   if (currency) q.andWhere('source_currency', currency);
   if (from)     q.andWhere('created_at', '>=', new Date(from));
-  if (to)       q.andWhere('created_at', '<=', new Date(to));
+  if (to)       { const toEnd = new Date(to); toEnd.setHours(23, 59, 59, 999); q.andWhere('created_at', '<=', toEnd); }
   q.orderBy('created_at', 'desc');
 
   const [{ count }] = await q.clone().clearOrder().count('* as count');

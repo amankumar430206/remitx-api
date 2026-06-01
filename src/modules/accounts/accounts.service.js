@@ -45,10 +45,10 @@ export const getAccount = async (id, tenantId, userId, role = null) => {
   return { ...account, balance, recentEntries };
 };
 
-export const getLedger = async (id, tenantId, userId, { from, to, page, limit }) => {
+export const getLedger = async (id, tenantId, userId, { from, to, page, limit }, role = null) => {
   const account = await repo.findAccountById(id, tenantId);
   if (!account) throw new AppError('NOT_FOUND', 'Account not found', 404);
-  if (account.user_id !== userId) throw new AppError('NOT_FOUND', 'Account not found', 404);
+  if (!ADMIN_ROLES.has(role) && account.user_id !== userId) throw new AppError('NOT_FOUND', 'Account not found', 404);
 
   const offset = (page - 1) * limit;
   const { data, total } = await repo.listLedgerEntries({ accountId: id, tenantId, from, to, limit, offset });

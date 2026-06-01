@@ -9,12 +9,16 @@ export const getStatement = async (req, res) => {
   if (result) res.json({ success: true, data: result });
 };
 
+const ADMIN_ROLES = new Set(['super_admin', 'client_admin']);
+
 export const getTransactions = async (req, res) => {
   const { from, to, status, direction, currency, format = 'json' } = req.query;
   const page  = parseInt(req.query.page  || '1',  10);
   const limit = parseInt(req.query.limit || '20', 10);
+  // Admins see all tenant transactions; regular users see only their own
+  const userId = ADMIN_ROLES.has(req.user.role) ? undefined : req.user.sub;
   const result = await svc.getTransactions(
-    { tenantId: req.user.tenantId, userId: req.user.sub, from, to, status, direction, currency, page, limit, format },
+    { tenantId: req.user.tenantId, userId, from, to, status, direction, currency, page, limit, format },
     res,
   );
   if (result) res.json({ success: true, ...result });
