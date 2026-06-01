@@ -166,7 +166,23 @@ export const deleteFeeConfig = async (tenantId, feeId, actorId, req) => {
 
 // ─── Provider corridor config ─────────────────────────────────────────────────
 
-export const getProviderConfig = async (tenantId) => repo.getCorridorConfigs(tenantId);
+export const getProviderConfig = async (tenantId) => {
+  const [corridors, defaultProviderName] = await Promise.all([
+    repo.getCorridorConfigs(tenantId),
+    repo.getTenantDefaultProvider(tenantId),
+  ]);
+  return { corridors, defaultProviderName };
+};
+
+export const setDefaultProvider = async (tenantId, providerName, actorId, req) => {
+  await getTenant(tenantId);
+  const row = await repo.setTenantDefaultProvider(tenantId, providerName);
+  // Bust all routing cache for this tenant
+  const keys = await redis.keys(`tenant:routing:${tenantId}:*`);
+  if (keys.length) await redis.del(...keys);
+  writeAudit({ tenantId, actorId, action: 'provider_config.default_updated', resourceType: 'tenant', resourceId: tenantId, req });
+  return row;
+};
 
 export const updateProviderConfig = async (tenantId, corridors, actorId, req) => {
   if (!Array.isArray(corridors)) throw new AppError('VALIDATION_ERROR', 'corridors must be an array', 400);

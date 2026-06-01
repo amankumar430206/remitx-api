@@ -73,6 +73,21 @@ export const listTenantAccounts = async (tenantId, trx = db) =>
     )
     .orderBy('a.currency', 'asc');
 
+// ─── Tenant default provider ──────────────────────────────────────────────────
+
+export const getTenantDefaultProvider = async (tenantId, trx = db) => {
+  const row = await trx('tenants').where({ id: tenantId }).select('default_provider_name').first();
+  return row?.default_provider_name ?? null;
+};
+
+export const setTenantDefaultProvider = async (tenantId, providerName, trx = db) => {
+  const [row] = await trx('tenants')
+    .where({ id: tenantId })
+    .update({ default_provider_name: providerName || null, updated_at: new Date() })
+    .returning('id', 'default_provider_name');
+  return row;
+};
+
 // ─── Provider corridor configs ────────────────────────────────────────────────
 
 export const getCorridorConfigs = async (tenantId, trx = db) =>

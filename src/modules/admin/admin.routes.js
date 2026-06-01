@@ -27,6 +27,9 @@ router.post('/tenants/:id/fee-config',                 authenticate, authorize('
 router.put('/tenants/:id/fee-config/:feeId',           authenticate, authorize('tenants:update'), ctrl.updateFeeConfig);
 router.delete('/tenants/:id/fee-config/:feeId',        authenticate, authorize('tenants:update'), ctrl.deleteFeeConfig);
 
+// ─── Per-tenant default provider ─────────────────────────────────────────────
+router.put('/tenants/:id/default-provider',                authenticate, authorize('tenants:update'), ctrl.setDefaultProvider);
+
 // ─── Per-tenant corridor CRUD ─────────────────────────────────────────────────
 router.post('/tenants/:id/provider-config',                authenticate, authorize('tenants:update'), ctrl.addTenantCorridor);
 router.delete('/tenants/:id/provider-config/:corridorId',  authenticate, authorize('tenants:update'), ctrl.deleteTenantCorridor);

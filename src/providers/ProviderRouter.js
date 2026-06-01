@@ -5,6 +5,7 @@ import { AppError } from '../shared/errors/AppError.js';
 import {
   resolveProviderForCorridor,
   resolveGlobalProviderForCorridor,
+  getTenantDefaultProvider,
 } from '../modules/admin/admin.repository.js';
 
 const registry = new Map([
@@ -31,15 +32,20 @@ export const getProvider = (name = config.defaultProvider) => {
  * implemented), we gracefully fall back to 'manual' so payments never break.
  */
 export const resolveProviderName = async (tenantId, sourceCurrency, destCurrency) => {
-  // 1. Tenant-specific
+  // 1. Tenant-specific corridor (exact or source wildcard)
   let name = await resolveProviderForCorridor(tenantId, sourceCurrency, destCurrency);
 
-  // 2. Global platform defaults
+  // 2. Tenant default provider (any corridor catch-all)
+  if (!name) {
+    name = await getTenantDefaultProvider(tenantId);
+  }
+
+  // 3. Global platform defaults
   if (!name) {
     name = await resolveGlobalProviderForCorridor(sourceCurrency, destCurrency);
   }
 
-  // 3. Env default or hard fallback
+  // 4. Env default or hard fallback
   const resolved = name || config.defaultProvider || 'manual';
 
   // 4. If not in registry, use 'manual' (provider configured but not yet implemented)

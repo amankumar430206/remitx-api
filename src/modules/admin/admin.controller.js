@@ -21,6 +21,10 @@ const corridorSchema = Joi.array().items(Joi.object({
   priority: Joi.number().integer().min(1).optional(),
 })).min(1).required();
 
+const defaultProviderSchema = Joi.object({
+  providerName: Joi.string().max(64).allow(null, '').optional(),
+});
+
 const singleCorridorSchema = Joi.object({
   sourceCurrency: Joi.string().length(3).uppercase().required(),
   destCurrency: Joi.string().length(3).uppercase().optional().allow(null, ''),
@@ -170,6 +174,13 @@ export const processPayment = async (req, res) => {
   const { error, value } = processPaymentSchema.validate(req.body);
   if (error) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: error.message } });
   const data = await service.processPayment(req.params.id, value, req.user.sub, req);
+  res.json({ success: true, data });
+};
+
+export const setDefaultProvider = async (req, res) => {
+  const { error, value } = defaultProviderSchema.validate(req.body);
+  if (error) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: error.message } });
+  const data = await service.setDefaultProvider(req.params.id, value.providerName || null, req.user.sub, req);
   res.json({ success: true, data });
 };
 
