@@ -29,7 +29,7 @@ export const getOpeningBalance = async ({ tenantId, accountId, from }, trx = db)
 
 // ─── Transactions ─────────────────────────────────────────────────────────────
 
-export const getTransactions = async ({ tenantId, userId, from, to, status, currency, page, limit }, trx = db) => {
+export const getTransactions = async ({ tenantId, userId, from, to, status, currency, search, page, limit }, trx = db) => {
   const q = trx('payments as p')
     .leftJoin('beneficiaries as b', 'b.id', 'p.beneficiary_id')
     .where('p.tenant_id', tenantId)
@@ -51,6 +51,12 @@ export const getTransactions = async ({ tenantId, userId, from, to, status, curr
   if (currency) q.andWhere('p.source_currency', currency);
   if (from)     q.andWhere('p.created_at', '>=', new Date(from));
   if (to)       { const toEnd = new Date(to); toEnd.setHours(23, 59, 59, 999); q.andWhere('p.created_at', '<=', toEnd); }
+  if (search) {
+    const term = `%${search}%`;
+    q.andWhere(function () {
+      this.whereILike('p.reference', term).orWhereILike('b.name', term).orWhereILike('p.status', term);
+    });
+  }
   q.orderBy('p.created_at', 'desc');
 
   const [{ count }] = await q.clone().clearOrder().clearSelect().count('* as count');

@@ -43,13 +43,13 @@ export const getStatement = async ({ tenantId, accountId, from, to, format = 'js
 
 // ─── Transactions ─────────────────────────────────────────────────────────────
 
-export const getTransactions = async ({ tenantId, userId, from, to, status, direction, currency, page = 1, limit = 20, format = 'json' }, res) => {
+export const getTransactions = async ({ tenantId, userId, from, to, status, direction, currency, search, page = 1, limit = 20, format = 'json' }, res) => {
   // Payments are outgoing debits; credit filter returns empty
   if (direction === 'credit') {
     if (format === 'csv') return streamTransactionsCsv(res, []);
     return { data: [], meta: { page, limit, total: 0, totalPages: 0 } };
   }
-  const { data, total } = await repo.getTransactions({ tenantId, userId, from, to, status, currency, page, limit });
+  const { data, total } = await repo.getTransactions({ tenantId, userId, from, to, status, currency, search, page, limit });
 
   if (format === 'csv') {
     return streamTransactionsCsv(res, data);
