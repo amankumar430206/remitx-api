@@ -12,7 +12,7 @@ export const tenantResolver = async (req, res, next) => {
   const tenant = await db('tenants').where({ slug }).first();
 
   if (!tenant) {
-    throw new AppError('NOT_FOUND', 'Tenant not found', 404);
+    throw new AppError('TENANT_NOT_FOUND', 'Workspace not found', 404);
   }
   if (tenant.status !== 'active') {
     throw new AppError('TENANT_INACTIVE', 'Tenant is not active', 403);
