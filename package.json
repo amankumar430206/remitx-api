@@ -13,7 +13,8 @@
     "migrate": "knex migrate:latest",
     "migrate:rollback": "knex migrate:rollback",
     "migrate:make": "knex migrate:make",
-    "seed": "knex seed:run"
+    "seed": "knex seed:run",
+    "seed:reset-passwords": "node scripts/reset-dev-passwords.js"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
