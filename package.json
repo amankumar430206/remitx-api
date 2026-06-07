@@ -6,14 +6,23 @@
     "node": ">=20"
   },
   "scripts": {
+    "//start": "Start the production HTTP server",
     "start": "node src/server.js",
+    "//dev": "Start the server in watch mode (auto-restart on file changes)",
     "dev": "node --watch src/server.js",
+    "//test": "Run the full Jest + Supertest suite serially (one worker)",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand",
+    "//test:coverage": "Run the test suite and emit a coverage report",
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
+    "//migrate": "Apply all pending Knex migrations (bring DB schema up to date)",
     "migrate": "knex migrate:latest",
+    "//migrate:rollback": "Roll back the most recent batch of migrations",
     "migrate:rollback": "knex migrate:rollback",
+    "//migrate:make": "Create a new migration file (usage: npm run migrate:make <name>)",
     "migrate:make": "knex migrate:make",
+    "//seed": "Run all seed files to populate the DB with default + demo data",
     "seed": "knex seed:run",
+    "//seed:reset-passwords": "Re-hash all dev/quick-login accounts to their canonical passwords (fixes seed password drift; dev only)",
     "seed:reset-passwords": "node scripts/reset-dev-passwords.js"
   },
   "dependencies": {
