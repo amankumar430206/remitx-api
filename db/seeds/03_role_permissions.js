@@ -4,7 +4,10 @@ const ROLE_DEFAULTS = {
   checker:         { name: 'Checker',         permissions: ['payments:approve', 'payments:view_all', 'accounts:view', 'beneficiaries:view', 'reports:view', 'reports:export'] },
   subclient_admin: { name: 'Sub-client Admin', permissions: ['payments:create', 'payments:approve', 'beneficiaries:*', 'accounts:create', 'accounts:view', 'users:invite', 'reports:view'] },
   subclient_user:  { name: 'Sub-client User',  permissions: ['payments:create', 'beneficiaries:create', 'accounts:view'] },
-  super_admin:     { name: 'Super Admin',      permissions: ['payments:*', 'beneficiaries:*', 'accounts:*', 'users:*', 'subclients:*', 'reports:*', 'admin:*', 'tenants:*', 'compliance:*'] },
+  // super_admin = platform owner: full wildcard on every domain so it can reach
+  // every feature/page AND manage roles/permissions for everyone. admin:* already
+  // covers admin:features (platform feature-flag editing); listed for clarity.
+  super_admin:     { name: 'Super Admin',      permissions: ['payments:*', 'beneficiaries:*', 'accounts:*', 'users:*', 'subclients:*', 'reports:*', 'admin:*', 'admin:features', 'tenants:*', 'compliance:*'] },
 };
 
 const expandPermissions = (permissions) => {

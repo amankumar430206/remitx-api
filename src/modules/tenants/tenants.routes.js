@@ -31,7 +31,10 @@ router.put('/roles/:key',       authenticate, authorize('admin:config'), ctrl.up
 router.delete('/roles/:key',    authenticate, authorize('admin:config'), ctrl.deleteRole);
 
 // ─── Feature flags ────────────────────────────────────────────────────────────
+// GET is open to any authenticated user (drives client-side feature gating).
+// Editing is platform-level (super admin only) via the admin:features permission,
+// which only super_admin satisfies (through its admin:* wildcard).
 router.get('/feature-flags', authenticate, ctrl.getFeatureFlags);
-router.put('/feature-flags', authenticate, authorize('admin:config'), ctrl.updateFeatureFlags);
+router.put('/feature-flags', authenticate, authorize('admin:features'), ctrl.updateFeatureFlags);
 
 export default router;
