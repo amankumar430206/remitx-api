@@ -21,10 +21,18 @@ const subClientSchema = Joi.object({
   lastName: Joi.string().max(128).optional().allow('', null),
 });
 
-const roleSchema = Joi.object({
-  role: Joi.string().max(64).required(),
-  permissions: Joi.array().items(Joi.string()).required(),
+const createRoleSchema = Joi.object({
+  name: Joi.string().max(128).required(),
+  key: Joi.string().max(64).optional(),
+  description: Joi.string().max(512).optional().allow('', null),
+  permissions: Joi.array().items(Joi.string()).default([]),
 });
+
+const updateRoleSchema = Joi.object({
+  name: Joi.string().max(128).optional(),
+  description: Joi.string().max(512).optional().allow('', null),
+  permissions: Joi.array().items(Joi.string()).optional(),
+}).min(1);
 
 export const getConfig = async (req, res) => {
   const config = await service.getTenantConfig(req.tenantId);
@@ -104,16 +112,33 @@ export const getSubClientById = async (req, res) => {
 
 // ─── Roles ────────────────────────────────────────────────────────────────────
 
+export const getPermissionCatalog = async (req, res) => {
+  const data = await service.getPermissionCatalog();
+  res.json({ success: true, data });
+};
+
 export const listRoles = async (req, res) => {
   const data = await service.listRoles(req.user.tenantId);
   res.json({ success: true, data });
 };
 
-export const upsertRole = async (req, res) => {
-  const { error, value } = roleSchema.validate(req.body);
+export const createRole = async (req, res) => {
+  const { error, value } = createRoleSchema.validate(req.body);
   if (error) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: error.message } });
-  const data = await service.upsertRole(req.user.tenantId, value);
+  const data = await service.createRole(req.user.tenantId, value);
   res.status(201).json({ success: true, data });
+};
+
+export const updateRole = async (req, res) => {
+  const { error, value } = updateRoleSchema.validate(req.body);
+  if (error) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: error.message } });
+  const data = await service.updateRole(req.user.tenantId, req.params.key, value);
+  res.json({ success: true, data });
+};
+
+export const deleteRole = async (req, res) => {
+  const data = await service.deleteRole(req.user.tenantId, req.params.key);
+  res.json({ success: true, data });
 };
 
 export const getFeatureFlags = async (req, res) => {

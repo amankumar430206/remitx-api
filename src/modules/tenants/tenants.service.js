@@ -3,6 +3,8 @@ import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcrypt';
 import { AppError } from '../../shared/errors/AppError.js';
 import redis from '../../config/redis.js';
+import db from '../../config/database.js';
+import { PERMISSION_CATALOG, findUnknownPermissions } from '../../shared/utils/permissionCatalog.js';
 import * as repo from './tenants.repository.js';
 
 const DEFAULT_THEME = {
@@ -19,17 +21,39 @@ const DEFAULT_THEME = {
 };
 
 export const ROLE_DEFAULTS = {
-  client_admin:    ['payments:*', 'beneficiaries:*', 'accounts:*', 'users:*', 'subclients:*', 'reports:*', 'admin:config'],
-  maker:           ['payments:create', 'payments:cancel', 'beneficiaries:create', 'accounts:view', 'reports:view'],
-  checker:         ['payments:approve', 'payments:view_all', 'accounts:view', 'reports:view', 'reports:export'],
-  subclient_admin: ['payments:create', 'payments:approve', 'beneficiaries:*', 'accounts:create', 'accounts:view', 'users:invite', 'reports:view'],
-  subclient_user:  ['payments:create', 'beneficiaries:create', 'accounts:view'],
+  client_admin: {
+    name: 'Admin',
+    description: 'Full access to the tenant workspace.',
+    permissions: ['payments:*', 'beneficiaries:*', 'accounts:*', 'users:*', 'subclients:*', 'reports:*', 'admin:config'],
+  },
+  maker: {
+    name: 'Maker',
+    description: 'Creates and cancels payments; cannot approve.',
+    permissions: ['payments:create', 'payments:cancel', 'beneficiaries:create', 'accounts:view', 'reports:view'],
+  },
+  checker: {
+    name: 'Checker',
+    description: 'Approves payments and views reports; cannot create payments.',
+    permissions: ['payments:approve', 'payments:view_all', 'accounts:view', 'reports:view', 'reports:export'],
+  },
+  subclient_admin: {
+    name: 'Sub-client Admin',
+    description: 'Administers a sub-client and its users.',
+    permissions: ['payments:create', 'payments:approve', 'beneficiaries:*', 'accounts:create', 'accounts:view', 'users:invite', 'reports:view'],
+  },
+  subclient_user: {
+    name: 'Sub-client User',
+    description: 'Day-to-day sub-client operations.',
+    permissions: ['payments:create', 'beneficiaries:create', 'accounts:view'],
+  },
 };
 
-// Seed default role permissions for a tenant (idempotent)
+// Seed default roles (metadata + permissions) for a tenant. Idempotent:
+// existing role metadata is left untouched so tenant edits survive re-runs.
 export const seedRoleDefaults = async (tenantId, trx) => {
-  for (const [role, permissions] of Object.entries(ROLE_DEFAULTS)) {
-    await repo.setRolePermissions(tenantId, role, permissions, trx);
+  for (const [key, def] of Object.entries(ROLE_DEFAULTS)) {
+    await repo.seedSystemRole(tenantId, { key, name: def.name, description: def.description }, trx);
+    await repo.setRolePermissions(tenantId, key, def.permissions, trx);
   }
 };
 
@@ -163,11 +187,17 @@ export const updateTheme = async (tenantId, { primaryColor, secondaryColor, comp
 
 // ─── User management ──────────────────────────────────────────────────────────
 
-export const inviteUser = async (tenantId, { email, role, firstName, lastName }) => {
-  const VALID_ROLES = Object.keys(ROLE_DEFAULTS);
-  if (!VALID_ROLES.includes(role)) {
-    throw new AppError('VALIDATION_ERROR', `role must be one of: ${VALID_ROLES.join(', ')}`, 400);
+// Validate that a role exists for this tenant (covers both seeded defaults and
+// tenant-authored custom roles — the roles table is the single source of truth).
+const assertRoleAssignable = async (tenantId, role) => {
+  const found = await repo.findRoleByKey(tenantId, role);
+  if (!found) {
+    throw new AppError('VALIDATION_ERROR', `Unknown role: ${role}`, 400);
   }
+};
+
+export const inviteUser = async (tenantId, { email, role, firstName, lastName }) => {
+  await assertRoleAssignable(tenantId, role);
 
   // Placeholder password — user sets real password via invite/accept
   const passwordHash = await bcrypt.hash(uuidv4(), 10);
@@ -209,10 +239,7 @@ export const updateUserStatus = async (id, tenantId, status) => {
 };
 
 export const updateUserPermissions = async (tenantId, userId, { role }) => {
-  const VALID_ROLES = Object.keys(ROLE_DEFAULTS);
-  if (!VALID_ROLES.includes(role)) {
-    throw new AppError('VALIDATION_ERROR', `role must be one of: ${VALID_ROLES.join(', ')}`, 400);
-  }
+  await assertRoleAssignable(tenantId, role);
   const user = await repo.updateUserRole(userId, tenantId, role);
   if (!user) throw new AppError('NOT_FOUND', 'User not found', 404);
 
@@ -263,22 +290,98 @@ export const getSubClientById = async (id, tenantId) => {
 
 // ─── Roles ────────────────────────────────────────────────────────────────────
 
-export const listRoles = async (tenantId) => repo.listRoles(tenantId);
+const ROLE_KEY_PATTERN = /^[a-z][a-z0-9_]{1,63}$/;
 
-export const upsertRole = async (tenantId, { role, permissions }) => {
-  if (!role || typeof role !== 'string') {
-    throw new AppError('VALIDATION_ERROR', 'role name is required', 400);
-  }
+// Derive a stable, URL-safe key from a human role name. e.g. "Treasury Ops" -> "treasury_ops"
+const slugifyRoleKey = (name) =>
+  String(name)
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 64);
+
+const assertPermissionsValid = (permissions) => {
   if (!Array.isArray(permissions)) {
     throw new AppError('VALIDATION_ERROR', 'permissions must be an array', 400);
   }
-  await repo.setRolePermissions(tenantId, role, permissions);
+  const unknown = findUnknownPermissions(permissions);
+  if (unknown.length > 0) {
+    throw new AppError('VALIDATION_ERROR', `Unknown permission(s): ${unknown.join(', ')}`, 400);
+  }
+};
 
-  // Invalidate permission cache for all users with this role
-  const users = await repo.getUsersWithRole(tenantId, role);
+// Drop cached permissions for everyone holding this role so the next request re-derives them.
+const invalidateRoleCache = async (tenantId, roleKey) => {
+  const users = await repo.getUsersWithRole(tenantId, roleKey);
   await Promise.all(users.map((u) => redis.del(`perms:${u.id}`)));
+};
 
-  return { role, permissions };
+export const getPermissionCatalog = async () => PERMISSION_CATALOG;
+
+export const listRoles = async (tenantId) => repo.listRoles(tenantId);
+
+export const createRole = async (tenantId, { name, key, description, permissions = [] }) => {
+  if (!name || typeof name !== 'string' || !name.trim()) {
+    throw new AppError('VALIDATION_ERROR', 'role name is required', 400);
+  }
+  const roleKey = key ? String(key).toLowerCase() : slugifyRoleKey(name);
+  if (!ROLE_KEY_PATTERN.test(roleKey)) {
+    throw new AppError('VALIDATION_ERROR', 'role key must start with a letter and contain only lowercase letters, numbers, and underscores', 400);
+  }
+  assertPermissionsValid(permissions);
+
+  const existing = await repo.findRoleByKey(tenantId, roleKey);
+  if (existing) {
+    throw new AppError('CONFLICT', `A role with key "${roleKey}" already exists`, 409);
+  }
+
+  await db.transaction(async (trx) => {
+    await repo.createRoleMeta(tenantId, { key: roleKey, name: name.trim(), description }, trx);
+    await repo.setRolePermissions(tenantId, roleKey, permissions, trx);
+  });
+
+  return { role: roleKey, key: roleKey, name: name.trim(), description: description ?? null, isSystem: false, permissions };
+};
+
+export const updateRole = async (tenantId, key, { name, description, permissions }) => {
+  const role = await repo.findRoleByKey(tenantId, key);
+  if (!role) throw new AppError('NOT_FOUND', 'Role not found', 404);
+
+  if (name !== undefined && (!name || !String(name).trim())) {
+    throw new AppError('VALIDATION_ERROR', 'role name cannot be empty', 400);
+  }
+  if (permissions !== undefined) assertPermissionsValid(permissions);
+
+  await db.transaction(async (trx) => {
+    if (name !== undefined || description !== undefined) {
+      await repo.updateRoleMeta(tenantId, key, {
+        name: name !== undefined ? String(name).trim() : undefined,
+        description,
+      }, trx);
+    }
+    if (permissions !== undefined) {
+      await repo.setRolePermissions(tenantId, key, permissions, trx);
+    }
+  });
+
+  if (permissions !== undefined) await invalidateRoleCache(tenantId, key);
+
+  const [updated] = (await repo.listRoles(tenantId)).filter((r) => r.key === key);
+  return updated;
+};
+
+export const deleteRole = async (tenantId, key) => {
+  const role = await repo.findRoleByKey(tenantId, key);
+  if (!role) throw new AppError('NOT_FOUND', 'Role not found', 404);
+
+  const userCount = await repo.countUsersWithRole(tenantId, key);
+  if (userCount > 0) {
+    throw new AppError('ROLE_IN_USE', `Cannot delete role "${key}" — ${userCount} user(s) still assigned. Reassign them first.`, 409);
+  }
+
+  await repo.deleteRole(tenantId, key);
+  return { key, deleted: true };
 };
 
 // ─── Feature flags ────────────────────────────────────────────────────────────

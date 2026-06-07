@@ -1,10 +1,10 @@
 const ROLE_DEFAULTS = {
-  client_admin:    ['payments:*', 'beneficiaries:*', 'accounts:*', 'users:*', 'subclients:*', 'reports:*', 'admin:config'],
-  maker:           ['payments:create', 'payments:cancel', 'beneficiaries:create', 'accounts:view', 'reports:view'],
-  checker:         ['payments:approve', 'payments:view_all', 'accounts:view', 'beneficiaries:view', 'reports:view', 'reports:export'],
-  subclient_admin: ['payments:create', 'payments:approve', 'beneficiaries:*', 'accounts:create', 'accounts:view', 'users:invite', 'reports:view'],
-  subclient_user:  ['payments:create', 'beneficiaries:create', 'accounts:view'],
-  super_admin:     ['payments:*', 'beneficiaries:*', 'accounts:*', 'users:*', 'subclients:*', 'reports:*', 'admin:*', 'tenants:*', 'compliance:*'],
+  client_admin:    { name: 'Admin',           permissions: ['payments:*', 'beneficiaries:*', 'accounts:*', 'users:*', 'subclients:*', 'reports:*', 'admin:config'] },
+  maker:           { name: 'Maker',           permissions: ['payments:create', 'payments:cancel', 'beneficiaries:create', 'accounts:view', 'reports:view'] },
+  checker:         { name: 'Checker',         permissions: ['payments:approve', 'payments:view_all', 'accounts:view', 'beneficiaries:view', 'reports:view', 'reports:export'] },
+  subclient_admin: { name: 'Sub-client Admin', permissions: ['payments:create', 'payments:approve', 'beneficiaries:*', 'accounts:create', 'accounts:view', 'users:invite', 'reports:view'] },
+  subclient_user:  { name: 'Sub-client User',  permissions: ['payments:create', 'beneficiaries:create', 'accounts:view'] },
+  super_admin:     { name: 'Super Admin',      permissions: ['payments:*', 'beneficiaries:*', 'accounts:*', 'users:*', 'subclients:*', 'reports:*', 'admin:*', 'tenants:*', 'compliance:*'] },
 };
 
 const expandPermissions = (permissions) => {
@@ -28,8 +28,13 @@ export const seed = async (knex) => {
   const tenant = await knex('tenants').where({ slug: 'remitx' }).first();
   if (!tenant) throw new Error('Default tenant not found — run 01_default_tenant first');
 
-  for (const [role, permissions] of Object.entries(ROLE_DEFAULTS)) {
-    const expanded = expandPermissions(permissions);
+  for (const [role, def] of Object.entries(ROLE_DEFAULTS)) {
+    await knex('roles')
+      .insert({ tenant_id: tenant.id, key: role, name: def.name, is_system: true })
+      .onConflict(['tenant_id', 'key'])
+      .ignore();
+
+    const expanded = expandPermissions(def.permissions);
     for (const permission of expanded) {
       await knex('role_permissions')
         .insert({ tenant_id: tenant.id, role, permission })

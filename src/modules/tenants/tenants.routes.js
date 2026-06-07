@@ -23,9 +23,12 @@ router.post('/sub-clients',     authenticate, authorize('subclients:*'), ctrl.cr
 router.get('/sub-clients',      authenticate, authorize('subclients:*'), ctrl.listSubClients);
 router.get('/sub-clients/:id',  authenticate, authorize('subclients:*'), ctrl.getSubClientById);
 
-// ─── Roles ────────────────────────────────────────────────────────────────────
-router.post('/roles', authenticate, authorize('admin:config'), ctrl.upsertRole);
-router.get('/roles',  authenticate, authorize('admin:config'), ctrl.listRoles);
+// ─── Roles & permissions ────────────────────────────────────────────────────────
+router.get('/permissions/catalog', authenticate, authorize('admin:config'), ctrl.getPermissionCatalog);
+router.get('/roles',            authenticate, authorize('admin:config'), ctrl.listRoles);
+router.post('/roles',           authenticate, authorize('admin:config'), ctrl.createRole);
+router.put('/roles/:key',       authenticate, authorize('admin:config'), ctrl.updateRole);
+router.delete('/roles/:key',    authenticate, authorize('admin:config'), ctrl.deleteRole);
 
 // ─── Feature flags ────────────────────────────────────────────────────────────
 router.get('/feature-flags', authenticate, ctrl.getFeatureFlags);

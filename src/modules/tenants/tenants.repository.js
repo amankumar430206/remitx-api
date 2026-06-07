@@ -109,19 +109,65 @@ export const updateUserRole = async (id, tenantId, role, trx = db) => {
   return row;
 };
 
-// ─── Role permissions ─────────────────────────────────────────────────────────
+// ─── Roles & permissions ──────────────────────────────────────────────────────
 
+// Returns every role (from the `roles` metadata table) with its permission list
+// joined in. A role with metadata but no permission rows yet returns [].
 export const listRoles = async (tenantId, trx = db) => {
-  const rows = await trx('role_permissions')
+  const roles = await trx('roles')
     .where({ tenant_id: tenantId })
-    .select('role', 'permission')
-    .orderBy('role');
-  const map = {};
-  for (const r of rows) {
-    if (!map[r.role]) map[r.role] = [];
-    map[r.role].push(r.permission);
+    .select('key', 'name', 'description', 'is_system')
+    .orderBy('name');
+  const perms = await trx('role_permissions')
+    .where({ tenant_id: tenantId })
+    .select('role', 'permission');
+
+  const byRole = {};
+  for (const p of perms) {
+    if (!byRole[p.role]) byRole[p.role] = [];
+    byRole[p.role].push(p.permission);
   }
-  return Object.entries(map).map(([role, permissions]) => ({ role, permissions }));
+  return roles.map((r) => ({
+    role: r.key, // kept as `role` for backward compat with existing callers
+    key: r.key,
+    name: r.name,
+    description: r.description,
+    isSystem: r.is_system,
+    permissions: byRole[r.key] ?? [],
+  }));
+};
+
+export const findRoleByKey = async (tenantId, key, trx = db) =>
+  trx('roles').where({ tenant_id: tenantId, key }).first();
+
+// Insert a seeded system role; leaves existing rows untouched (idempotent seed).
+export const seedSystemRole = async (tenantId, { key, name, description }, trx = db) =>
+  trx('roles')
+    .insert({ tenant_id: tenantId, key, name, description: description ?? null, is_system: true })
+    .onConflict(['tenant_id', 'key'])
+    .ignore();
+
+export const createRoleMeta = async (tenantId, { key, name, description }, trx = db) => {
+  const [row] = await trx('roles')
+    .insert({ tenant_id: tenantId, key, name, description: description ?? null, is_system: false })
+    .returning('*');
+  return row;
+};
+
+export const updateRoleMeta = async (tenantId, key, { name, description }, trx = db) => {
+  const patch = { updated_at: new Date() };
+  if (name !== undefined) patch.name = name;
+  if (description !== undefined) patch.description = description;
+  const [row] = await trx('roles')
+    .where({ tenant_id: tenantId, key })
+    .update(patch)
+    .returning('*');
+  return row;
+};
+
+export const deleteRole = async (tenantId, key, trx = db) => {
+  await trx('role_permissions').where({ tenant_id: tenantId, role: key }).delete();
+  return trx('roles').where({ tenant_id: tenantId, key }).delete();
 };
 
 export const getRolePermissions = async (tenantId, role, trx = db) =>
@@ -137,6 +183,13 @@ export const setRolePermissions = async (tenantId, role, permissions, trx = db) 
 
 export const getUsersWithRole = async (tenantId, role, trx = db) =>
   trx('users').where({ tenant_id: tenantId, role }).select('id');
+
+export const countUsersWithRole = async (tenantId, role, trx = db) => {
+  const [{ count }] = await trx('users')
+    .where({ tenant_id: tenantId, role })
+    .count({ count: '*' });
+  return Number(count);
+};
 
 // ─── Sub-clients ──────────────────────────────────────────────────────────────
 
