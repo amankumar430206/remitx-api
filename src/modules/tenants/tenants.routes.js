@@ -25,6 +25,7 @@ router.get('/sub-clients/:id',  authenticate, authorize('subclients:*'), ctrl.ge
 
 // ─── Roles & permissions ────────────────────────────────────────────────────────
 router.get('/permissions/catalog', authenticate, authorize('admin:config'), ctrl.getPermissionCatalog);
+router.get('/role-templates',      authenticate, authorize('admin:config'), ctrl.getRoleTemplates);
 router.get('/roles',            authenticate, authorize('admin:config'), ctrl.listRoles);
 router.post('/roles',           authenticate, authorize('admin:config'), ctrl.createRole);
 router.put('/roles/:key',       authenticate, authorize('admin:config'), ctrl.updateRole);

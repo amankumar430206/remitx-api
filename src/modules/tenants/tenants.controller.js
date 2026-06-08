@@ -117,6 +117,11 @@ export const getPermissionCatalog = async (req, res) => {
   res.json({ success: true, data });
 };
 
+export const getRoleTemplates = async (req, res) => {
+  const data = await service.getRoleTemplates();
+  res.json({ success: true, data });
+};
+
 export const listRoles = async (req, res) => {
   const data = await service.listRoles(req.user.tenantId);
   res.json({ success: true, data });

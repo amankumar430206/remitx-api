@@ -20,12 +20,29 @@ const DEFAULT_THEME = {
   webhook_enabled: false,
 };
 
-export const ROLE_DEFAULTS = {
+// ─── Default role hierarchy ─────────────────────────────────────────────────────
+// A clean, simple tier every tenant gets out of the box:
+//   super_admin  → platform/system owner (seeded once, not per tenant)
+//   client_admin → administers the client/tenant workspace
+//   user         → regular client user
+// Everything else (maker, checker, sub-client roles) is an optional TEMPLATE that
+// a super admin or client admin can instantiate on demand from the UI.
+export const CORE_ROLES = {
   client_admin: {
-    name: 'Admin',
-    description: 'Full access to the tenant workspace.',
+    name: 'Client Admin',
+    description: 'Administers the client workspace — manages users, roles, beneficiaries, and payments.',
     permissions: ['payments:*', 'beneficiaries:*', 'accounts:*', 'users:*', 'subclients:*', 'reports:*', 'admin:config'],
   },
+  user: {
+    name: 'User',
+    description: 'Regular client user — creates payments and manages beneficiaries.',
+    permissions: ['payments:create', 'payments:view', 'beneficiaries:view', 'beneficiaries:create', 'accounts:view', 'reports:view'],
+  },
+};
+
+// Pre-defined starting points an admin can load when creating a new role. These
+// are NOT seeded for new tenants — they are offered in the UI as templates.
+export const ROLE_TEMPLATES = {
   maker: {
     name: 'Maker',
     description: 'Creates and cancels payments; cannot approve.',
@@ -48,14 +65,30 @@ export const ROLE_DEFAULTS = {
   },
 };
 
-// Seed default roles (metadata + permissions) for a tenant. Idempotent:
+// Display order for the role list — higher in the hierarchy first, custom roles last.
+const ROLE_RANK = {
+  super_admin: 0, client_admin: 1, user: 2,
+  maker: 3, checker: 4, subclient_admin: 5, subclient_user: 6,
+};
+const rankOf = (key) => (key in ROLE_RANK ? ROLE_RANK[key] : 50);
+
+// Seed the core role hierarchy (metadata + permissions) for a tenant. Idempotent:
 // existing role metadata is left untouched so tenant edits survive re-runs.
 export const seedRoleDefaults = async (tenantId, trx) => {
-  for (const [key, def] of Object.entries(ROLE_DEFAULTS)) {
+  for (const [key, def] of Object.entries(CORE_ROLES)) {
     await repo.seedSystemRole(tenantId, { key, name: def.name, description: def.description }, trx);
     await repo.setRolePermissions(tenantId, key, def.permissions, trx);
   }
 };
+
+// Templates offered in the UI when creating a role (name + suggested permissions).
+export const getRoleTemplates = async () =>
+  Object.entries(ROLE_TEMPLATES).map(([key, def]) => ({
+    key,
+    name: def.name,
+    description: def.description,
+    permissions: def.permissions,
+  }));
 
 export const getTenantConfig = async (tenantId) => {
   const tenant = await repo.findTenantById(tenantId);
@@ -319,7 +352,11 @@ const invalidateRoleCache = async (tenantId, roleKey) => {
 
 export const getPermissionCatalog = async () => PERMISSION_CATALOG;
 
-export const listRoles = async (tenantId) => repo.listRoles(tenantId);
+// Roles ordered by hierarchy (super_admin → client_admin → user → templates → custom).
+export const listRoles = async (tenantId) => {
+  const roles = await repo.listRoles(tenantId);
+  return roles.sort((a, b) => rankOf(a.key) - rankOf(b.key) || a.name.localeCompare(b.name));
+};
 
 export const createRole = async (tenantId, { name, key, description, permissions = [] }) => {
   if (!name || typeof name !== 'string' || !name.trim()) {
