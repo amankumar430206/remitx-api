@@ -130,19 +130,19 @@ export const listRoles = async (req, res) => {
 export const createRole = async (req, res) => {
   const { error, value } = createRoleSchema.validate(req.body);
   if (error) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: error.message } });
-  const data = await service.createRole(req.user.tenantId, value);
+  const data = await service.createRole(req.user.tenantId, value, req.user.sub);
   res.status(201).json({ success: true, data });
 };
 
 export const updateRole = async (req, res) => {
   const { error, value } = updateRoleSchema.validate(req.body);
   if (error) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: error.message } });
-  const data = await service.updateRole(req.user.tenantId, req.params.key, value);
+  const data = await service.updateRole(req.user.tenantId, req.params.key, value, req.user.sub);
   res.json({ success: true, data });
 };
 
 export const deleteRole = async (req, res) => {
-  const data = await service.deleteRole(req.user.tenantId, req.params.key);
+  const data = await service.deleteRole(req.user.tenantId, req.params.key, req.user.sub);
   res.json({ success: true, data });
 };
 

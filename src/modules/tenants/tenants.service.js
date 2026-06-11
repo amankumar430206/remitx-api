@@ -5,6 +5,7 @@ import { AppError } from '../../shared/errors/AppError.js';
 import redis from '../../config/redis.js';
 import db from '../../config/database.js';
 import { PERMISSION_CATALOG, findUnknownPermissions } from '../../shared/utils/permissionCatalog.js';
+import { writeAudit } from '../../shared/utils/audit.js';
 import * as repo from './tenants.repository.js';
 
 const DEFAULT_THEME = {
@@ -353,12 +354,18 @@ const invalidateRoleCache = async (tenantId, roleKey) => {
 export const getPermissionCatalog = async () => PERMISSION_CATALOG;
 
 // Roles ordered by hierarchy (super_admin → client_admin → user → templates → custom).
+// Includes a `userCount` field showing how many users currently hold each role.
 export const listRoles = async (tenantId) => {
-  const roles = await repo.listRoles(tenantId);
-  return roles.sort((a, b) => rankOf(a.key) - rankOf(b.key) || a.name.localeCompare(b.name));
+  const [roles, userCounts] = await Promise.all([
+    repo.listRoles(tenantId),
+    repo.countUsersPerRole(tenantId),
+  ]);
+  return roles
+    .sort((a, b) => rankOf(a.key) - rankOf(b.key) || a.name.localeCompare(b.name))
+    .map((r) => ({ ...r, userCount: userCounts[r.key] ?? 0 }));
 };
 
-export const createRole = async (tenantId, { name, key, description, permissions = [] }) => {
+export const createRole = async (tenantId, { name, key, description, permissions = [] }, actorId) => {
   if (!name || typeof name !== 'string' || !name.trim()) {
     throw new AppError('VALIDATION_ERROR', 'role name is required', 400);
   }
@@ -378,17 +385,29 @@ export const createRole = async (tenantId, { name, key, description, permissions
     await repo.setRolePermissions(tenantId, roleKey, permissions, trx);
   });
 
-  return { role: roleKey, key: roleKey, name: name.trim(), description: description ?? null, isSystem: false, permissions };
+  await writeAudit({
+    tenantId, actorId, action: 'role.created',
+    resourceType: 'role', resourceId: roleKey,
+    after: { key: roleKey, name: name.trim(), permissions },
+  });
+
+  return { role: roleKey, key: roleKey, name: name.trim(), description: description ?? null, isSystem: false, permissions, userCount: 0 };
 };
 
-export const updateRole = async (tenantId, key, { name, description, permissions }) => {
+export const updateRole = async (tenantId, key, { name, description, permissions }, actorId) => {
   const role = await repo.findRoleByKey(tenantId, key);
   if (!role) throw new AppError('NOT_FOUND', 'Role not found', 404);
+
+  if (role.is_system) {
+    throw new AppError('FORBIDDEN', 'System roles cannot be modified. Create a custom role instead.', 403);
+  }
 
   if (name !== undefined && (!name || !String(name).trim())) {
     throw new AppError('VALIDATION_ERROR', 'role name cannot be empty', 400);
   }
   if (permissions !== undefined) assertPermissionsValid(permissions);
+
+  const before = { name: role.name, description: role.description };
 
   await db.transaction(async (trx) => {
     if (name !== undefined || description !== undefined) {
@@ -405,12 +424,24 @@ export const updateRole = async (tenantId, key, { name, description, permissions
   if (permissions !== undefined) await invalidateRoleCache(tenantId, key);
 
   const [updated] = (await repo.listRoles(tenantId)).filter((r) => r.key === key);
+
+  await writeAudit({
+    tenantId, actorId, action: 'role.updated',
+    resourceType: 'role', resourceId: key,
+    before,
+    after: { name: updated?.name, permissions: updated?.permissions },
+  });
+
   return updated;
 };
 
-export const deleteRole = async (tenantId, key) => {
+export const deleteRole = async (tenantId, key, actorId) => {
   const role = await repo.findRoleByKey(tenantId, key);
   if (!role) throw new AppError('NOT_FOUND', 'Role not found', 404);
+
+  if (role.is_system) {
+    throw new AppError('FORBIDDEN', 'System roles cannot be deleted.', 403);
+  }
 
   const userCount = await repo.countUsersWithRole(tenantId, key);
   if (userCount > 0) {
@@ -418,6 +449,13 @@ export const deleteRole = async (tenantId, key) => {
   }
 
   await repo.deleteRole(tenantId, key);
+
+  await writeAudit({
+    tenantId, actorId, action: 'role.deleted',
+    resourceType: 'role', resourceId: key,
+    before: { key, name: role.name },
+  });
+
   return { key, deleted: true };
 };
 

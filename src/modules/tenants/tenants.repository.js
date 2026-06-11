@@ -191,6 +191,16 @@ export const countUsersWithRole = async (tenantId, role, trx = db) => {
   return Number(count);
 };
 
+// Returns { [roleKey]: userCount } for all roles in the tenant (single query).
+export const countUsersPerRole = async (tenantId, trx = db) => {
+  const rows = await trx('users')
+    .where({ tenant_id: tenantId })
+    .groupBy('role')
+    .select('role')
+    .count({ count: '*' });
+  return rows.reduce((acc, r) => { acc[r.role] = Number(r.count); return acc; }, {});
+};
+
 // ─── Sub-clients ──────────────────────────────────────────────────────────────
 
 export const listSubClients = async (tenantId, parentUserId, trx = db) => {

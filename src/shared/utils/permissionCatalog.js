@@ -79,6 +79,9 @@ export const PERMISSION_CATALOG = [
     label: 'Administration',
     permissions: [
       { key: 'admin:config', label: 'Tenant configuration' },
+      { key: 'admin:features', label: 'Manage feature flags' },
+      { key: 'admin:kyc', label: 'KYC queue administration' },
+      { key: 'admin:*', label: 'Full admin access', wildcard: true },
     ],
   },
 ];
