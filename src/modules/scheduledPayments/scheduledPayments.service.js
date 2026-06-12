@@ -72,6 +72,37 @@ export const updateScheduledPayment = async (id, tenantId, userId, changes) => {
   return repo.update(id, tenantId, patch);
 };
 
+// ─── Skip current occurrence ─────────────────────────────────────────────────
+
+export const skipScheduledPayment = async (id, tenantId, userId) => {
+  const row = await repo.findById(id, tenantId);
+  if (!row) throw new AppError('NOT_FOUND', 'Scheduled payment not found', 404);
+  if (row.user_id !== userId) throw new AppError('FORBIDDEN', 'Only the creator can skip a scheduled payment', 403);
+  if (row.status !== 'active') throw new AppError('INVALID_STATE', `Cannot skip a scheduled payment with status "${row.status}"`, 422);
+  if (row.frequency === 'once') throw new AppError('INVALID_STATE', 'Cannot skip a one-time payment — cancel it instead', 422);
+
+  const nextDate = nextExecutionDate(row.scheduled_for, row.frequency);
+  const pastEnd  = row.end_date && nextDate >= new Date(row.end_date);
+
+  return repo.update(id, tenantId, {
+    scheduled_for:          nextDate,
+    status:                 pastEnd ? 'completed' : 'active',
+    balance_insufficient:   false,
+    balance_alert_last_day: null,
+  });
+};
+
+// ─── Manual execute now ───────────────────────────────────────────────────────
+
+export const executeScheduledPaymentNow = async (id, tenantId, userId) => {
+  const row = await repo.findById(id, tenantId);
+  if (!row) throw new AppError('NOT_FOUND', 'Scheduled payment not found', 404);
+  if (row.status !== 'active') throw new AppError('INVALID_STATE', `Cannot execute a scheduled payment with status "${row.status}"`, 422);
+  const payment = await executeScheduledPayment(row);
+  if (!payment) throw new AppError('INSUFFICIENT_BALANCE', 'Account balance is insufficient for this payment', 422);
+  return { scheduled: await repo.findById(id, tenantId), payment };
+};
+
 // ─── Worker: execute a due scheduled payment ─────────────────────────────────
 
 export const executeScheduledPayment = async (scheduled) => {

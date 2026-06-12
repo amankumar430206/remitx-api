@@ -43,3 +43,13 @@ export const cancel = async (req, res) => {
   const result = await svc.cancelScheduledPayment(req.params.id, req.user.tenantId, req.user.sub);
   res.json({ success: true, data: result });
 };
+
+export const skip = async (req, res) => {
+  const result = await svc.skipScheduledPayment(req.params.id, req.user.tenantId, req.user.sub);
+  res.json({ success: true, data: result });
+};
+
+export const executeNow = async (req, res) => {
+  const result = await svc.executeScheduledPaymentNow(req.params.id, req.user.tenantId, req.user.sub);
+  res.json({ success: true, data: result });
+};

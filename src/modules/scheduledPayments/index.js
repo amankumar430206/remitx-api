@@ -4,7 +4,9 @@ export {
   getScheduledPayment,
   cancelScheduledPayment,
   updateScheduledPayment,
+  skipScheduledPayment,
   executeScheduledPayment,
+  executeScheduledPaymentNow,
   checkUpcomingBalanceAlerts,
 } from './scheduledPayments.service.js';
 
