@@ -1,7 +1,8 @@
 import { AppError } from '../../shared/errors/AppError.js';
 import * as repo from './reporting.repository.js';
+import { getTenantTheme } from '../tenants/index.js';
 import { streamLedgerCsv, streamTransactionsCsv } from './formatters/csv.js';
-import { streamStatementPdf } from './formatters/pdf.js';
+import { streamStatementPdf, streamTransactionsPdf } from './formatters/pdf.js';
 import { buildMt940 } from './formatters/mt940.js';
 
 // ─── Statement ────────────────────────────────────────────────────────────────
@@ -20,8 +21,10 @@ export const getStatement = async ({ tenantId, accountId, from, to, format = 'js
     case 'csv':
       return streamLedgerCsv(res, entries);
 
-    case 'pdf':
-      return streamStatementPdf(res, { entries, accountNumber, currency, from, to, openingBalance });
+    case 'pdf': {
+      const branding = await getTenantTheme(tenantId);
+      return streamStatementPdf(res, { entries, accountNumber, currency, from, to, openingBalance, branding });
+    }
 
     case 'mt940': {
       const text = buildMt940({ entries, accountNumber, currency, from, openingBalance });
@@ -47,12 +50,18 @@ export const getTransactions = async ({ tenantId, userId, from, to, status, dire
   // Payments are outgoing debits; credit filter returns empty
   if (direction === 'credit') {
     if (format === 'csv') return streamTransactionsCsv(res, []);
+    if (format === 'pdf') {
+      const branding = await getTenantTheme(tenantId);
+      return streamTransactionsPdf(res, [], { from, to, branding });
+    }
     return { data: [], meta: { page, limit, total: 0, totalPages: 0 } };
   }
   const { data, total } = await repo.getTransactions({ tenantId, userId, from, to, status, currency, search, page, limit });
 
-  if (format === 'csv') {
-    return streamTransactionsCsv(res, data);
+  if (format === 'csv') return streamTransactionsCsv(res, data);
+  if (format === 'pdf') {
+    const branding = await getTenantTheme(tenantId);
+    return streamTransactionsPdf(res, data, { from, to, branding });
   }
 
   return {
