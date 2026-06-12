@@ -49,7 +49,7 @@ export const submitPayment = async (payload, userId, tenantId, idempotencyKey, r
   if (balance === null) throw new AppError('NOT_FOUND', 'Account not found', 404);
 
   const [feeAmount, providerName] = await Promise.all([
-    resolveFee(tenantId, quote.from, quote.to, quote.fromAmount),
+    resolveFee(tenantId, quote.from, quote.to, quote.fromAmount, 'transaction_send'),
     resolveProviderName(tenantId, quote.from, quote.to),
   ]);
   const totalDebit = add(quote.fromAmount, feeAmount);

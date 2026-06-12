@@ -38,9 +38,14 @@ const processPaymentSchema = Joi.object({
   providerRef: Joi.string().max(128).optional().allow('', null),
 });
 
+const FEE_CATEGORIES = ['account_activation', 'iban_creation', 'transaction_send', 'transaction_receive', 'monthly_maintenance', 'amc'];
+
 const feeConfigSchema = Joi.object({
-  sourceCurrency: Joi.string().length(3).uppercase().required(),
-  destCurrency:   Joi.string().length(3).uppercase().optional().allow(null),
+  feeCategory:    Joi.string().valid(...FEE_CATEGORIES).required(),
+  // source_currency: required for corridor/currency fees; omit for AMC (tenant-wide)
+  sourceCurrency: Joi.string().max(8).uppercase().optional().allow(null, ''),
+  // dest_currency: only relevant for transaction_send / transaction_receive corridors
+  destCurrency:   Joi.string().length(3).uppercase().optional().allow(null, ''),
   inheritGlobal:  Joi.boolean().optional().default(false),
   feeType:        Joi.string().valid('flat', 'percent').optional(),
   feeValue:       Joi.number().positive().optional(),
@@ -58,8 +63,9 @@ const feeConfigUpdateSchema = Joi.object({
 }).min(1);
 
 const globalFeeConfigSchema = Joi.object({
-  sourceCurrency: Joi.string().length(3).uppercase().required(),
-  destCurrency:   Joi.string().length(3).uppercase().optional().allow(null),
+  feeCategory:    Joi.string().valid(...FEE_CATEGORIES).required(),
+  sourceCurrency: Joi.string().max(8).uppercase().optional().allow(null, ''),
+  destCurrency:   Joi.string().length(3).uppercase().optional().allow(null, ''),
   feeType:        Joi.string().valid('flat', 'percent').required(),
   feeValue:       Joi.number().positive().required(),
   minFee:         Joi.number().min(0).optional().allow(null),
@@ -159,7 +165,8 @@ export const getTenantContact = async (req, res) => {
 // ─── Fee config ───────────────────────────────────────────────────────────────
 
 export const listFeeConfigs = async (req, res) => {
-  const data = await service.listFeeConfigs(req.params.id);
+  const { category } = req.query;
+  const data = await service.listFeeConfigs(req.params.id, { category });
   res.json({ success: true, data });
 };
 
@@ -168,6 +175,11 @@ export const createFeeConfig = async (req, res) => {
   if (error) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: error.message } });
   if (!value.inheritGlobal && (!value.feeType || value.feeValue === undefined)) {
     return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: '"feeType" and "feeValue" are required when inheritGlobal is false' } });
+  }
+  // transaction fees require at least a source currency
+  const isTransaction = ['transaction_send', 'transaction_receive'].includes(value.feeCategory);
+  if (isTransaction && !value.sourceCurrency) {
+    return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: '"sourceCurrency" is required for transaction fees' } });
   }
   const data = await service.createFeeConfig(req.params.id, value, req.user.sub, req);
   res.status(201).json({ success: true, data });
@@ -188,13 +200,18 @@ export const deleteFeeConfig = async (req, res) => {
 // ─── Global fee config ────────────────────────────────────────────────────────
 
 export const listGlobalFeeConfigs = async (req, res) => {
-  const data = await service.listGlobalFeeConfigs();
+  const { category } = req.query;
+  const data = await service.listGlobalFeeConfigs({ category });
   res.json({ success: true, data });
 };
 
 export const createGlobalFeeConfig = async (req, res) => {
   const { error, value } = globalFeeConfigSchema.validate(req.body);
   if (error) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: error.message } });
+  const isTransaction = ['transaction_send', 'transaction_receive'].includes(value.feeCategory);
+  if (isTransaction && !value.sourceCurrency) {
+    return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: '"sourceCurrency" is required for transaction fees' } });
+  }
   const data = await service.createGlobalFeeConfig(value, req.user.sub, req);
   res.status(201).json({ success: true, data });
 };

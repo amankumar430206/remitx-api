@@ -96,6 +96,8 @@ export const getTenantContact = async (id) => {
 
 // ─── Fee config ───────────────────────────────────────────────────────────────
 
+const TRANSACTION_CATEGORIES = new Set(['transaction_send', 'transaction_receive']);
+
 const computeFee = (config, amount) => {
   if (!config) return '0.00000000';
   if (config.fee_type === 'flat') return String(config.fee_value);
@@ -107,29 +109,41 @@ const computeFee = (config, amount) => {
   return fee;
 };
 
-export const resolveFee = async (tenantId, sourceCurrency, destCurrency, amount) => {
-  const config = await repo.resolveFeeConfig(tenantId, sourceCurrency, destCurrency);
+// Resolve a transaction fee — defaults to transaction_send for backwards compat.
+export const resolveFee = async (tenantId, sourceCurrency, destCurrency, amount, category = 'transaction_send') => {
+  const config = await repo.resolveFeeConfig(tenantId, category, sourceCurrency, destCurrency);
   return computeFee(config, amount);
 };
 
-export const previewFee = async (tenantId, sourceCurrency, destCurrency, amount) => {
-  const config = await repo.resolveFeeConfig(tenantId, sourceCurrency, destCurrency);
+export const previewFee = async (tenantId, sourceCurrency, destCurrency, amount, category = 'transaction_send') => {
+  const config = await repo.resolveFeeConfig(tenantId, category, sourceCurrency, destCurrency);
   const feeAmount = computeFee(config, amount);
-  return { feeAmount, configured: !!config };
+  return { feeAmount, configured: !!config, feeCategory: category };
 };
 
-export const listFeeConfigs = async (tenantId) => {
-  await getTenant(tenantId); // ensure tenant exists
-  return repo.listFeeConfigs(tenantId);
+// Resolve a non-amount-based fee (activation, IBAN creation, monthly, AMC).
+// Returns the flat fee amount as a string, or '0.00000000' if not configured.
+export const resolveFeeByCategory = async (tenantId, category, currency = null) => {
+  if (TRANSACTION_CATEGORIES.has(category)) {
+    throw new AppError('VALIDATION_ERROR', 'Use resolveFee for transaction_send / transaction_receive', 400);
+  }
+  const config = await repo.resolveFeeConfig(tenantId, category, currency, null);
+  return { feeAmount: computeFee(config, 0), configured: !!config, config };
+};
+
+export const listFeeConfigs = async (tenantId, { category } = {}) => {
+  await getTenant(tenantId);
+  return repo.listFeeConfigs(tenantId, { category });
 };
 
 export const createFeeConfig = async (tenantId, data, actorId, req) => {
   await getTenant(tenantId);
 
   const row = await repo.createFeeConfig({
-    tenant_id:      tenantId,
-    source_currency: data.sourceCurrency.toUpperCase(),
-    dest_currency:   data.destCurrency ? data.destCurrency.toUpperCase() : null,
+    tenant_id:       tenantId,
+    fee_category:    data.feeCategory,
+    source_currency: data.sourceCurrency ? data.sourceCurrency.toUpperCase() : null,
+    dest_currency:   data.destCurrency   ? data.destCurrency.toUpperCase()   : null,
     inherit_global:  data.inheritGlobal ?? false,
     fee_type:        data.inheritGlobal ? null : data.feeType,
     fee_value:       data.inheritGlobal ? null : data.feeValue,
@@ -144,8 +158,8 @@ export const createFeeConfig = async (tenantId, data, actorId, req) => {
 
 export const updateFeeConfig = async (tenantId, feeId, data, actorId, req) => {
   const updates = {};
-  if (data.isActive       !== undefined) updates.is_active     = data.isActive;
-  if (data.inheritGlobal  !== undefined) {
+  if (data.isActive      !== undefined) updates.is_active     = data.isActive;
+  if (data.inheritGlobal !== undefined) {
     updates.inherit_global = data.inheritGlobal;
     if (data.inheritGlobal) {
       updates.fee_type  = null;
@@ -178,12 +192,13 @@ export const deleteFeeConfig = async (tenantId, feeId, actorId, req) => {
 
 // ─── Global fee config ────────────────────────────────────────────────────────
 
-export const listGlobalFeeConfigs = async () => repo.listGlobalFeeConfigs();
+export const listGlobalFeeConfigs = async ({ category } = {}) => repo.listGlobalFeeConfigs({ category });
 
 export const createGlobalFeeConfig = async (data, actorId, req) => {
   const row = await repo.createGlobalFeeConfig({
-    source_currency: data.sourceCurrency.toUpperCase(),
-    dest_currency:   data.destCurrency ? data.destCurrency.toUpperCase() : null,
+    fee_category:    data.feeCategory,
+    source_currency: data.sourceCurrency ? data.sourceCurrency.toUpperCase() : null,
+    dest_currency:   data.destCurrency   ? data.destCurrency.toUpperCase()   : null,
     fee_type:        data.feeType,
     fee_value:       data.feeValue,
     min_fee:         data.minFee ?? null,

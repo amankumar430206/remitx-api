@@ -170,13 +170,15 @@ export const resolveGlobalProviderForCorridor = async (sourceCurrency, destCurre
 
 // ─── Fee configs ─────────────────────────────────────────────────────────────
 
-export const listFeeConfigs = async (tenantId, trx = db) =>
-  trx('fee_configs')
-    .where({ tenant_id: tenantId })
-    .orderBy([
-      { column: 'source_currency', order: 'asc' },
-      { column: 'dest_currency',   order: 'asc' },
-    ]);
+export const listFeeConfigs = async (tenantId, { category } = {}, trx = db) => {
+  const q = trx('fee_configs').where({ tenant_id: tenantId });
+  if (category) q.where({ fee_category: category });
+  return q.orderBy([
+    { column: 'fee_category',    order: 'asc' },
+    { column: 'source_currency', order: 'asc' },
+    { column: 'dest_currency',   order: 'asc' },
+  ]);
+};
 
 export const findFeeConfig = async (id, tenantId, trx = db) =>
   trx('fee_configs').where({ id, tenant_id: tenantId }).first();
@@ -197,42 +199,71 @@ export const updateFeeConfig = async (id, tenantId, data, trx = db) => {
 export const deleteFeeConfig = async (id, tenantId, trx = db) =>
   trx('fee_configs').where({ id, tenant_id: tenantId }).delete();
 
-export const resolveFeeConfig = async (tenantId, sourceCurrency, destCurrency, trx = db) => {
-  // 1. Tenant exact corridor match (custom rules only — inherit_global rows excluded)
-  const exact = await trx('fee_configs')
-    .where({ tenant_id: tenantId, source_currency: sourceCurrency, dest_currency: destCurrency, is_active: true, inherit_global: false })
-    .first();
-  if (exact) return exact;
+// Resolution waterfall: tenant exact → tenant wildcard dest → tenant wildcard src → global exact → global wildcard dest → global wildcard src
+export const resolveFeeConfig = async (tenantId, category, sourceCurrency, destCurrency, trx = db) => {
+  const tenantBase = { tenant_id: tenantId, fee_category: category, is_active: true, inherit_global: false };
+  const globalBase = { fee_category: category, is_active: true };
 
-  // 2. Tenant wildcard (custom rules only)
-  const wildcard = await trx('fee_configs')
-    .where({ tenant_id: tenantId, source_currency: sourceCurrency, is_active: true, inherit_global: false })
+  // 1. Tenant: exact corridor (source + dest)
+  if (sourceCurrency && destCurrency) {
+    const r = await trx('fee_configs').where({ ...tenantBase, source_currency: sourceCurrency, dest_currency: destCurrency }).first();
+    if (r) return r;
+  }
+
+  // 2. Tenant: wildcard dest (source only)
+  if (sourceCurrency) {
+    const r = await trx('fee_configs')
+      .where({ ...tenantBase, source_currency: sourceCurrency })
+      .whereNull('dest_currency')
+      .first();
+    if (r) return r;
+  }
+
+  // 3. Tenant: wildcard source (NULL source = applies to all currencies)
+  {
+    const r = await trx('fee_configs')
+      .where({ ...tenantBase })
+      .whereNull('source_currency')
+      .whereNull('dest_currency')
+      .first();
+    if (r) return r;
+  }
+
+  // 4. Global: exact corridor
+  if (sourceCurrency && destCurrency) {
+    const r = await trx('global_fee_configs').where({ ...globalBase, source_currency: sourceCurrency, dest_currency: destCurrency }).first();
+    if (r) return r;
+  }
+
+  // 5. Global: wildcard dest
+  if (sourceCurrency) {
+    const r = await trx('global_fee_configs')
+      .where({ ...globalBase, source_currency: sourceCurrency })
+      .whereNull('dest_currency')
+      .first();
+    if (r) return r;
+  }
+
+  // 6. Global: wildcard source (NULL = platform-wide default for this category)
+  const r = await trx('global_fee_configs')
+    .where({ ...globalBase })
+    .whereNull('source_currency')
     .whereNull('dest_currency')
     .first();
-  if (wildcard) return wildcard;
-
-  // 3. Global exact corridor match
-  const globalExact = await trx('global_fee_configs')
-    .where({ source_currency: sourceCurrency, dest_currency: destCurrency, is_active: true })
-    .first();
-  if (globalExact) return globalExact;
-
-  // 4. Global wildcard
-  const globalWildcard = await trx('global_fee_configs')
-    .where({ source_currency: sourceCurrency, is_active: true })
-    .whereNull('dest_currency')
-    .first();
-  return globalWildcard ?? null;
+  return r ?? null;
 };
 
 // ─── Global fee configs ───────────────────────────────────────────────────────
 
-export const listGlobalFeeConfigs = async (trx = db) =>
-  trx('global_fee_configs')
-    .orderBy([
-      { column: 'source_currency', order: 'asc' },
-      { column: 'dest_currency',   order: 'asc' },
-    ]);
+export const listGlobalFeeConfigs = async ({ category } = {}, trx = db) => {
+  const q = trx('global_fee_configs');
+  if (category) q.where({ fee_category: category });
+  return q.orderBy([
+    { column: 'fee_category',    order: 'asc' },
+    { column: 'source_currency', order: 'asc' },
+    { column: 'dest_currency',   order: 'asc' },
+  ]);
+};
 
 export const findGlobalFeeConfig = async (id, trx = db) =>
   trx('global_fee_configs').where({ id }).first();
