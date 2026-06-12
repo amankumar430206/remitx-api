@@ -401,8 +401,8 @@ export const resetClientTheme = async (tenantId) => {
 
 // ─── Cross-tenant views ───────────────────────────────────────────────────────
 
-export const listAllPayments = async ({ page = 1, limit = 20, tenantId, status, providerName, from, to }) => {
-  const { data, total } = await repo.listAllPayments({ page, limit, tenantId, status, providerName, from, to });
+export const listAllPayments = async ({ page = 1, limit = 20, tenantId, status, providerName, from, to, currency, scheduled }) => {
+  const { data, total } = await repo.listAllPayments({ page, limit, tenantId, status, providerName, from, to, currency, scheduled });
   return { data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
 };
 

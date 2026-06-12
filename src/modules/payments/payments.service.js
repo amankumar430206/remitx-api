@@ -32,7 +32,7 @@ const enqueueNotification = (eventType, payload) => {
 // ─── Submit ──────────────────────────────────────────────────────────────────
 
 export const submitPayment = async (payload, userId, tenantId, idempotencyKey, req) => {
-  const { beneficiaryId, accountId, quoteId, purposeCode, note } = payload;
+  const { beneficiaryId, accountId, quoteId, purposeCode, note, scheduledPaymentId } = payload;
 
   // Idempotency check
   const existing = await repo.findByIdempotencyKey(tenantId, idempotencyKey);
@@ -90,6 +90,7 @@ export const submitPayment = async (payload, userId, tenantId, idempotencyKey, r
     provider_name: providerName,
     status: initialStatus,
     note: note || null,
+    scheduled_payment_id: scheduledPaymentId || null,
   };
 
   const payment = await db.transaction(async (trx) => {
@@ -298,10 +299,10 @@ export const getPayment = async (paymentId, tenantId) => {
   return { ...payment, status_history: history };
 };
 
-export const listPayments = async (tenantId, userIds, { page = 1, limit = 20, status, direction, search, from, to } = {}) => {
+export const listPayments = async (tenantId, userIds, { page = 1, limit = 20, status, direction, search, from, to, currency, scheduled } = {}) => {
   // All payments in this system are outgoing debits — credit filter returns empty
   if (direction === 'credit') return { data: [], meta: { page, limit, total: 0 } };
-  const { data, total } = await repo.list({ tenantId, userIds, status, search, from, to, page, limit });
+  const { data, total } = await repo.list({ tenantId, userIds, status, search, from, to, currency, scheduled, page, limit });
   return {
     data,
     meta: {

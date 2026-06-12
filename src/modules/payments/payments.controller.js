@@ -15,7 +15,7 @@ export const submit = async (req, res) => {
 export const list = async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page || '1', 10));
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '20', 10)));
-  const { status, direction, search, from, to } = req.query;
+  const { status, direction, search, from, to, currency, scheduled } = req.query;
 
   // Super admin sees all tenants cross-tenant (optional tenantId filter)
   if (req.user.role === 'super_admin') {
@@ -27,6 +27,8 @@ export const list = async (req, res) => {
       providerName: providerName || undefined,
       from:         from         || undefined,
       to:           to           || undefined,
+      currency:     currency     || undefined,
+      scheduled:    scheduled    || undefined,
     });
     return res.json({ success: true, data: result.data, meta: result.meta, requestId: req.id });
   }
@@ -38,11 +40,13 @@ export const list = async (req, res) => {
 
   const result = await service.listPayments(req.tenantId, userIds, {
     page, limit,
-    status: status || undefined,
+    status:    status    || undefined,
     direction: direction || undefined,
-    search: search || undefined,
-    from: from || undefined,
-    to: to || undefined,
+    search:    search    || undefined,
+    from:      from      || undefined,
+    to:        to        || undefined,
+    currency:  currency  || undefined,
+    scheduled: scheduled || undefined,
   });
   res.json({ success: true, data: result.data, meta: result.meta, requestId: req.id });
 };

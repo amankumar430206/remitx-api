@@ -55,12 +55,14 @@ export const update = async (id, tenantId, data, trx = db) => {
   return row;
 };
 
-export const list = async ({ tenantId, userIds, status, search, from, to, page, limit }, trx = db) => {
+export const list = async ({ tenantId, userIds, status, search, from, to, currency, scheduled, page, limit }, trx = db) => {
   // Shared filter logic applied to both data and count queries
   const applyFilters = (q) => {
     q.where({ 'payments.tenant_id': tenantId });
     if (userIds?.length) q.whereIn('payments.user_id', userIds);
     if (status) q.andWhere({ 'payments.status': status });
+    if (currency) q.andWhere('payments.source_currency', currency.toUpperCase());
+    if (scheduled === true || scheduled === 'true') q.whereNotNull('payments.scheduled_payment_id');
     if (search) {
       const term = `%${search}%`;
       q.andWhere(sub => sub

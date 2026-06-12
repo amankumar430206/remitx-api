@@ -140,11 +140,12 @@ export const executeScheduledPayment = async (scheduled) => {
   try {
     payment = await submitPayment(
       {
-        beneficiaryId: scheduled.beneficiary_id,
-        accountId:     scheduled.account_id,
-        quoteId:       quote.quoteId,
-        purposeCode:   scheduled.purpose_code,
-        note:          scheduled.note,
+        beneficiaryId:       scheduled.beneficiary_id,
+        accountId:           scheduled.account_id,
+        quoteId:             quote.quoteId,
+        purposeCode:         scheduled.purpose_code,
+        note:                scheduled.note,
+        scheduledPaymentId:  scheduled.id,
       },
       userId,
       tenantId,

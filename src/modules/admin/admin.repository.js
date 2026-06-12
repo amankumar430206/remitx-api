@@ -304,11 +304,13 @@ export const processManualPayment = async (id, tenantId, data, trx = db) => {
 
 // ─── Cross-tenant views ───────────────────────────────────────────────────────
 
-export const listAllPayments = async ({ page, limit, tenantId, status, providerName, from, to }, trx = db) => {
+export const listAllPayments = async ({ page, limit, tenantId, status, providerName, from, to, currency, scheduled }, trx = db) => {
   const applyFilters = (q) => {
     if (tenantId)     q.where({ 'p.tenant_id': tenantId });
     if (status)       q.andWhere({ 'p.status': status });
     if (providerName) q.andWhere({ 'p.provider_name': providerName });
+    if (currency)     q.andWhere('p.source_currency', currency.toUpperCase());
+    if (scheduled === true || scheduled === 'true') q.whereNotNull('p.scheduled_payment_id');
     if (from)         q.andWhere('p.created_at', '>=', new Date(from));
     if (to) {
       const toEnd = new Date(to);
