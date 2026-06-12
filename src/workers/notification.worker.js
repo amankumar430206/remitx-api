@@ -18,8 +18,9 @@ const EVENTS = {
   'payment.completed':         { channels: ['email', 'inapp', 'sms'], roles: ['maker', 'client_admin'], title: 'Payment Completed' },
   'payment.failed':            { channels: ['email', 'inapp', 'sms'], roles: ['maker', 'client_admin'], title: 'Payment Failed' },
   'payment.manual_pending':    { channels: ['email', 'inapp'], roles: ['super_admin'],   title: 'Payment Pending Manual Review' },
-  'payment.compliance_flagged':{ channels: ['email', 'inapp'], roles: ['super_admin'],   title: 'Payment Flagged for Compliance' },
-  'kyc.submitted':             { channels: ['email', 'inapp'], roles: ['super_admin', 'client_admin'], title: 'New KYC Application' },
+  'payment.compliance_flagged':          { channels: ['email', 'inapp'], roles: ['super_admin'],   title: 'Payment Flagged for Compliance' },
+  'scheduled_payment.insufficient_funds':{ channels: ['email', 'inapp'], roles: ['self'],           title: 'Scheduled Payment — Insufficient Funds' },
+  'kyc.submitted':                       { channels: ['email', 'inapp'], roles: ['super_admin', 'client_admin'], title: 'New KYC Application' },
   'kyc.approved':              { channels: ['email', 'inapp'], roles: ['self'],           title: 'KYC Approved' },
   'kyc.rejected':              { channels: ['email', 'inapp', 'sms'], roles: ['self'],   title: 'KYC Rejected' },
 };
@@ -34,6 +35,11 @@ const buildBody = (eventType, payload) => {
     case 'payment.failed':            return `Your payment ${ref} has failed. Please contact support.`;
     case 'payment.manual_pending':    return `Payment ${ref} has been dispatched to the manual processing queue.`;
     case 'payment.compliance_flagged':return `Payment ${ref} has been flagged for compliance review.`;
+    case 'scheduled_payment.insufficient_funds': {
+      const days = payload.daysRemaining;
+      const amt  = payload.amount ? `${parseFloat(payload.amount).toFixed(2)} ${payload.currency}` : 'your scheduled payment';
+      return `Your scheduled payment of ${amt} is due in ${days} day${days !== 1 ? 's' : ''} but your account balance is insufficient. Please fund your account or cancel the payment.`;
+    }
     case 'kyc.submitted':             return 'A new KYC application has been submitted and requires review.';
     case 'kyc.approved':              return 'Your identity verification has been approved. You can now send payments.';
     case 'kyc.rejected':              return `Your identity verification was rejected. ${payload.reason ? `Reason: ${payload.reason}` : 'Please resubmit your documents.'}`;

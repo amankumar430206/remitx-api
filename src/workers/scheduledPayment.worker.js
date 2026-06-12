@@ -2,11 +2,16 @@ import { Worker, Queue } from 'bullmq';
 import { config } from '../config/index.js';
 import { logger } from '../shared/utils/logger.js';
 import { findDue } from '../modules/scheduledPayments/scheduledPayments.repository.js';
-import { executeScheduledPayment } from '../modules/scheduledPayments/index.js';
+import { executeScheduledPayment, checkUpcomingBalanceAlerts } from '../modules/scheduledPayments/index.js';
 
 const connection = { url: config.redisUrl };
 
-const processCheck = async () => {
+const processJob = async (job) => {
+  if (job.name === 'scheduled-payments.balance-check') {
+    return checkUpcomingBalanceAlerts();
+  }
+
+  // 'scheduled-payments.check' — execute all due schedules
   const due = await findDue();
   if (due.length === 0) return;
 
@@ -16,7 +21,6 @@ const processCheck = async () => {
     try {
       await executeScheduledPayment(scheduled);
     } catch (err) {
-      // Log and continue — one failure must not block the others
       logger.error(
         { scheduledPaymentId: scheduled.id, tenantId: scheduled.tenant_id, err: err.message },
         'Failed to execute scheduled payment',
@@ -27,21 +31,30 @@ const processCheck = async () => {
 
 export const scheduledPaymentWorker = new Worker(
   'scheduled-payment-queue',
-  processCheck,
+  processJob,
   { connection, autorun: false },
 );
 
 scheduledPaymentWorker.on('failed', (job, err) => {
-  logger.error({ jobId: job?.id, err: err.message }, 'Scheduled payment check job failed');
+  logger.error({ jobId: job?.id, jobName: job?.name, err: err.message }, 'Scheduled payment job failed');
 });
 
-// Registers a repeating cron that fires the check every minute
 export const scheduleScheduledPaymentsCron = async () => {
   const queue = new Queue('scheduled-payment-queue', { connection });
+
+  // Execution check — every minute
   await queue.add(
     'scheduled-payments.check',
     {},
     { repeat: { pattern: '* * * * *', tz: 'UTC' } },
   );
-  logger.info('Scheduled payment cron registered (every minute)');
+
+  // Balance-alert sweep — daily at 09:00 UTC
+  await queue.add(
+    'scheduled-payments.balance-check',
+    {},
+    { repeat: { pattern: '0 9 * * *', tz: 'UTC' } },
+  );
+
+  logger.info('Scheduled payment crons registered (exec: every min, balance check: 09:00 UTC)');
 };

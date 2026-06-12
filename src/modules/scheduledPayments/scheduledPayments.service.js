@@ -1,9 +1,11 @@
+import Big from 'big.js';
 import { v4 as uuidv4 } from 'uuid';
-import db from '../../config/database.js';
 import { AppError } from '../../shared/errors/AppError.js';
 import { logger } from '../../shared/utils/logger.js';
 import { lockQuote } from '../fx/index.js';
 import { submitPayment } from '../payments/index.js';
+import { getAccountBalance } from '../accounts/index.js';
+import { notificationQueue } from '../../config/queues.js';
 import * as repo from './scheduledPayments.repository.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -15,14 +17,17 @@ const nextExecutionDate = (from, frequency) => {
   return d;
 };
 
-// ─── Public API ───────────────────────────────────────────────────────────────
+const daysUntil = (date) =>
+  Math.ceil((new Date(date) - Date.now()) / (24 * 60 * 60 * 1000));
+
+// ─── CRUD ─────────────────────────────────────────────────────────────────────
 
 export const createScheduledPayment = async (payload, userId, tenantId) => {
-  const data = {
-    tenant_id:      tenantId,
-    user_id:        userId,
-    beneficiary_id: payload.beneficiaryId,
-    account_id:     payload.accountId,
+  return repo.create({
+    tenant_id:       tenantId,
+    user_id:         userId,
+    beneficiary_id:  payload.beneficiaryId,
+    account_id:      payload.accountId,
     source_currency: payload.sourceCurrency,
     dest_currency:   payload.destCurrency,
     source_amount:   payload.sourceAmount,
@@ -32,9 +37,7 @@ export const createScheduledPayment = async (payload, userId, tenantId) => {
     scheduled_for:   new Date(payload.scheduledFor),
     end_date:        payload.endDate ? new Date(payload.endDate) : null,
     status:          'active',
-  };
-
-  return repo.create(data);
+  });
 };
 
 export const listScheduledPayments = async (tenantId, userId, filters) => {
@@ -50,27 +53,16 @@ export const getScheduledPayment = async (id, tenantId) => {
 export const cancelScheduledPayment = async (id, tenantId, userId) => {
   const row = await repo.findById(id, tenantId);
   if (!row) throw new AppError('NOT_FOUND', 'Scheduled payment not found', 404);
-
-  if (row.user_id !== userId) {
-    throw new AppError('FORBIDDEN', 'Only the creator can cancel a scheduled payment', 403);
-  }
-  if (row.status !== 'active') {
-    throw new AppError('INVALID_STATE', `Cannot cancel a scheduled payment with status "${row.status}"`, 422);
-  }
-
+  if (row.user_id !== userId) throw new AppError('FORBIDDEN', 'Only the creator can cancel a scheduled payment', 403);
+  if (row.status !== 'active') throw new AppError('INVALID_STATE', `Cannot cancel a scheduled payment with status "${row.status}"`, 422);
   return repo.update(id, tenantId, { status: 'cancelled' });
 };
 
 export const updateScheduledPayment = async (id, tenantId, userId, changes) => {
   const row = await repo.findById(id, tenantId);
   if (!row) throw new AppError('NOT_FOUND', 'Scheduled payment not found', 404);
-
-  if (row.user_id !== userId) {
-    throw new AppError('FORBIDDEN', 'Only the creator can modify a scheduled payment', 403);
-  }
-  if (row.status !== 'active') {
-    throw new AppError('INVALID_STATE', 'Only active scheduled payments can be modified', 422);
-  }
+  if (row.user_id !== userId) throw new AppError('FORBIDDEN', 'Only the creator can modify a scheduled payment', 403);
+  if (row.status !== 'active') throw new AppError('INVALID_STATE', 'Only active scheduled payments can be modified', 422);
 
   const patch = {};
   if (changes.scheduledFor) patch.scheduled_for = new Date(changes.scheduledFor);
@@ -80,14 +72,29 @@ export const updateScheduledPayment = async (id, tenantId, userId, changes) => {
   return repo.update(id, tenantId, patch);
 };
 
-// ─── Worker entry point ───────────────────────────────────────────────────────
+// ─── Worker: execute a due scheduled payment ─────────────────────────────────
 
 export const executeScheduledPayment = async (scheduled) => {
   const { id, tenant_id: tenantId, user_id: userId } = scheduled;
 
+  // Balance check before touching FX quote
+  const balance = await getAccountBalance(scheduled.account_id, tenantId);
+  const required = new Big(scheduled.source_amount);
+
+  if (new Big(balance).lt(required)) {
+    await repo.update(id, tenantId, { balance_insufficient: true });
+    logger.warn({ scheduledPaymentId: id, balance, required: required.toFixed(8) }, 'Scheduled payment skipped — insufficient balance');
+    // Notification queued by the daily balance-alert cron (avoids duplicate on execution day)
+    return null;
+  }
+
+  // Clear flag if it was previously set
+  if (scheduled.balance_insufficient) {
+    await repo.update(id, tenantId, { balance_insufficient: false, balance_alert_last_day: null });
+  }
+
   logger.info({ scheduledPaymentId: id, tenantId }, 'Executing scheduled payment');
 
-  // Lock a fresh FX quote at current market rate
   const quote = await lockQuote(
     tenantId,
     scheduled.source_currency,
@@ -96,8 +103,6 @@ export const executeScheduledPayment = async (scheduled) => {
   );
 
   const idempotencyKey = `scheduled-${id}-exec-${scheduled.execution_count + 1}`;
-
-  // Minimal worker context — submitPayment uses this for requestId in audit logs
   const workerReq = { id: `worker-${idempotencyKey}`, user: { sub: userId, tenantId } };
 
   let payment;
@@ -116,27 +121,72 @@ export const executeScheduledPayment = async (scheduled) => {
       workerReq,
     );
   } catch (err) {
-    // Mark schedule as failed for this run and let the worker surface it
     logger.error({ scheduledPaymentId: id, err: err.message }, 'Scheduled payment execution failed');
     throw err;
   }
 
-  // Advance schedule
-  const now      = new Date();
-  const isOnce   = scheduled.frequency === 'once';
-  const pastEnd  = scheduled.end_date && now >= new Date(scheduled.end_date);
-  const isDone   = isOnce || pastEnd;
-
-  const nextScheduledFor = isDone ? null : nextExecutionDate(scheduled.scheduled_for, scheduled.frequency);
+  const now     = new Date();
+  const isOnce  = scheduled.frequency === 'once';
+  const pastEnd = scheduled.end_date && now >= new Date(scheduled.end_date);
+  const isDone  = isOnce || pastEnd;
 
   await repo.update(id, tenantId, {
-    execution_count:  scheduled.execution_count + 1,
-    last_executed_at: now,
-    last_payment_id:  payment.id,
-    scheduled_for:    nextScheduledFor ?? scheduled.scheduled_for,
-    status:           isDone ? 'completed' : 'active',
+    execution_count:       scheduled.execution_count + 1,
+    last_executed_at:      now,
+    last_payment_id:       payment.id,
+    scheduled_for:         isDone ? scheduled.scheduled_for : nextExecutionDate(scheduled.scheduled_for, scheduled.frequency),
+    status:                isDone ? 'completed' : 'active',
+    balance_insufficient:  false,
+    balance_alert_last_day: null,
   });
 
   logger.info({ scheduledPaymentId: id, paymentId: payment.id, isDone }, 'Scheduled payment executed');
   return payment;
+};
+
+// ─── Worker: daily balance-alert sweep ───────────────────────────────────────
+
+export const checkUpcomingBalanceAlerts = async () => {
+  const upcoming = await repo.findUpcoming(5);
+  if (upcoming.length === 0) return;
+
+  logger.info({ count: upcoming.length }, 'Running scheduled payment balance alert check');
+
+  for (const scheduled of upcoming) {
+    try {
+      const days = daysUntil(scheduled.scheduled_for);
+      if (days < 1 || days > 5) continue;
+
+      // Skip if we already sent this exact countdown alert today
+      if (scheduled.balance_alert_last_day === days) continue;
+
+      const balance = await getAccountBalance(scheduled.account_id, scheduled.tenant_id);
+      const insufficient = new Big(balance).lt(new Big(scheduled.source_amount));
+
+      if (insufficient) {
+        await repo.update(scheduled.id, scheduled.tenant_id, {
+          balance_insufficient:  true,
+          balance_alert_last_day: days,
+        });
+
+        await notificationQueue.add('scheduled_payment.insufficient_funds', {
+          tenantId:            scheduled.tenant_id,
+          userId:              scheduled.user_id,
+          scheduledPaymentId:  scheduled.id,
+          amount:              scheduled.source_amount,
+          currency:            scheduled.source_currency,
+          daysRemaining:       days,
+        }, { attempts: 3, backoff: { type: 'exponential', delay: 2000 } });
+
+      } else if (scheduled.balance_insufficient) {
+        // Balance now sufficient — clear the alert
+        await repo.update(scheduled.id, scheduled.tenant_id, {
+          balance_insufficient:  false,
+          balance_alert_last_day: null,
+        });
+      }
+    } catch (err) {
+      logger.error({ scheduledPaymentId: scheduled.id, err: err.message }, 'Balance alert check failed for schedule');
+    }
+  }
 };

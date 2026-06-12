@@ -31,6 +31,16 @@ export const findDue = async (trx = db) => {
     .select('*');
 };
 
+// Balance-alert cron uses this to find schedules due within N days
+export const findUpcoming = async (withinDays, trx = db) => {
+  const cutoff = new Date(Date.now() + withinDays * 24 * 60 * 60 * 1000);
+  return trx('scheduled_payments')
+    .where({ status: 'active' })
+    .where('scheduled_for', '>', new Date())
+    .where('scheduled_for', '<=', cutoff)
+    .select('*');
+};
+
 export const update = async (id, tenantId, data, trx = db) => {
   const [row] = await trx('scheduled_payments')
     .where({ id, tenant_id: tenantId })
