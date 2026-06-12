@@ -9,16 +9,18 @@ const ROLE_DEFAULTS = {
   checker:         { name: 'Checker',         permissions: ['payments:approve', 'payments:view_all', 'accounts:view', 'beneficiaries:view', 'reports:view', 'reports:export', 'fees:view'] },
   subclient_admin: { name: 'Sub-client Admin', permissions: ['payments:create', 'payments:approve', 'beneficiaries:*', 'accounts:create', 'accounts:view', 'users:invite', 'reports:view'] },
   subclient_user:  { name: 'Sub-client User',  permissions: ['payments:create', 'beneficiaries:create', 'accounts:view'] },
-  // super_admin = platform owner: full wildcard on every domain so it can reach
-  // every feature/page AND manage roles/permissions for everyone. admin:* already
-  // covers admin:features (platform feature-flag editing); listed for clarity.
-  super_admin:     { name: 'Super Admin',      permissions: ['payments:*', 'beneficiaries:*', 'accounts:*', 'users:*', 'subclients:*', 'reports:*', 'admin:*', 'admin:features', 'tenants:*', 'compliance:*', 'fees:*'] },
+  // super_admin = platform owner: *:* bypasses every authorize() check so no
+  // seed update is needed when new permission domains are introduced.
+  super_admin:     { name: 'Super Admin',      permissions: ['*:*'] },
 };
 
 const expandPermissions = (permissions) => {
   const expanded = new Set();
   for (const perm of permissions) {
-    if (perm.endsWith(':*')) {
+    if (perm === '*:*') {
+      // Global super-admin wildcard — store as-is, no expansion needed
+      expanded.add(perm);
+    } else if (perm.endsWith(':*')) {
       const domain = perm.slice(0, -2);
       const actions = ['create', 'view', 'view_all', 'update', 'delete', 'approve', 'cancel', 'export', 'config', 'invite', 'manage', 'global', 'review', 'features', 'kyc'];
       for (const action of actions) {

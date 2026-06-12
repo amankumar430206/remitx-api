@@ -8,6 +8,13 @@
 
 export const PERMISSION_CATALOG = [
   {
+    domain: '*',
+    label: 'Platform Super-Admin',
+    permissions: [
+      { key: '*:*', label: 'Full platform access (bypasses all permission checks)', wildcard: true },
+    ],
+  },
+  {
     domain: 'payments',
     label: 'Payments',
     permissions: [
