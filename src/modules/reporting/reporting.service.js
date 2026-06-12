@@ -56,7 +56,12 @@ export const getTransactions = async ({ tenantId, userId, from, to, status, dire
     }
     return { data: [], meta: { page, limit, total: 0, totalPages: 0 } };
   }
-  const { data, total } = await repo.getTransactions({ tenantId, userId, from, to, status, currency, search, page, limit });
+  const isExport = format === 'csv' || format === 'pdf';
+  const { data, total } = await repo.getTransactions({
+    tenantId, userId, from, to, status, currency, search,
+    page: isExport ? 1 : page,
+    limit: isExport ? 100_000 : limit,
+  });
 
   if (format === 'csv') return streamTransactionsCsv(res, data);
   if (format === 'pdf') {
