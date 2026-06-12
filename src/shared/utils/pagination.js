@@ -18,7 +18,7 @@ export const paginate = async (queryBuilder, { page = 1, limit = 20, maxLimit = 
   const safePage = Math.max(parseInt(page), 1);
   const offset = (safePage - 1) * safeLimit;
 
-  const [{ count }] = await queryBuilder.clone().count('* as count');
+  const [{ count }] = await queryBuilder.clone().clearOrder().count('* as count');
   const data = await queryBuilder.limit(safeLimit).offset(offset);
 
   return {
