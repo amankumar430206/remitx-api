@@ -75,6 +75,16 @@ export const PERMISSION_CATALOG = [
     ],
   },
   {
+    domain: 'fees',
+    label: 'Fee Configuration',
+    permissions: [
+      { key: 'fees:view',   label: 'View fee rules (own tenant)' },
+      { key: 'fees:manage', label: 'Create / update / delete fee rules (own tenant)' },
+      { key: 'fees:global', label: 'Manage platform-wide global fee rules' },
+      { key: 'fees:*',      label: 'Full fee configuration access', wildcard: true },
+    ],
+  },
+  {
     domain: 'admin',
     label: 'Administration',
     permissions: [
