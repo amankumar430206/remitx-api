@@ -9,37 +9,14 @@ const CW   = PW - ML * 2;  // 761.89 usable
 // ─── Design tokens ─────────────────────────────────────────────────────────────
 const BLACK  = '#111827';
 const MUTED  = '#6B7280';
-const SUBTLE = '#9CA3AF';
 const BG_HDR = '#F3F4F6';
 const BG_ALT = '#FAFAFA';
 const BORDER = '#E5E7EB';
 const BORDER_LT = '#F3F4F6';
 const SUCCESS = '#059669';
-const WARNING = '#D97706';
 const DANGER  = '#DC2626';
-const INFO    = '#2563EB';
 
 // ─── Status helpers ─────────────────────────────────────────────────────────────
-const STATUS_SHORT = {
-  pending_approval:          'Pending',
-  pending_manual_processing: 'Manual',
-  pending_compliance:        'Compliance',
-  completed:                 'Completed',
-  processing:                'Processing',
-  approved:                  'Approved',
-  rejected:                  'Rejected',
-  failed:                    'Failed',
-  cancelled:                 'Cancelled',
-};
-
-const statusShort  = (s = '') => STATUS_SHORT[s] || s.split('_').map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
-const statusColour = (s = '') => {
-  if (s === 'completed')                      return SUCCESS;
-  if (s === 'approved' || s === 'processing') return INFO;
-  if (s === 'rejected' || s === 'failed')     return DANGER;
-  if (s === 'cancelled')                      return SUBTLE;
-  return WARNING;
-};
 
 // ─── Image fetch ────────────────────────────────────────────────────────────────
 const fetchImageBuffer = async (url) => {
@@ -272,27 +249,17 @@ export const streamTransactionsPdf = async (res, rows, { from, to, branding } = 
     const fee     = parseFloat(p.fee_amount) === 0
                   ? 'Free'
                   : `${p.source_currency} ${parseFloat(p.fee_amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    const sc      = statusColour(p.status);
-    const sl      = statusShort(p.status);
+    const sl      = (p.status || '').toUpperCase().replace(/_/g, ' ');
 
     const o = { rowH: ROW_H };
     txt(doc, date, txX[0], rowY, TX[0].w, { ...o, size: 7.5 });
     txt(doc, ref,  txX[1], rowY, TX[1].w, { ...o, font: 'Courier', size: 7, color: MUTED });
     txt(doc, bene, txX[2], rowY, TX[2].w, { ...o, font: 'Helvetica-Bold', size: 7.5 });
     txt(doc, sent, txX[3], rowY, TX[3].w, { ...o, font: 'Courier', size: 7.5, align: 'right' });
-    txt(doc, recv, txX[4], rowY, TX[4].w, { ...o, font: 'Courier', size: 7.5, align: 'right', color: SUCCESS });
+    txt(doc, recv, txX[4], rowY, TX[4].w, { ...o, font: 'Courier', size: 7.5, align: 'right' });
     txt(doc, rate, txX[5], rowY, TX[5].w, { ...o, font: 'Courier', size: 7,   align: 'right', color: MUTED });
     txt(doc, fee,  txX[6], rowY, TX[6].w, { ...o, font: 'Courier', size: 7,   align: 'right', color: MUTED });
-
-    // Status: pill background + coloured dot + short label
-    const pillX = txX[7] + 5;
-    const pillY = rowY + (ROW_H - 14) / 2;
-    doc.save()
-       .roundedRect(pillX, pillY, 10, 10, 5)
-       .fillColor(sc + '22').fill()
-       .restore();
-    doc.save().circle(pillX + 5, pillY + 5, 2.5).fillColor(sc).fill().restore();
-    txt(doc, sl, txX[7] + 18, rowY, TX[7].w - 18, { ...o, size: 7.5, color: sc, font: 'Helvetica-Bold' });
+    txt(doc, sl,   txX[7], rowY, TX[7].w, { ...o, size: 7 });
 
     line(doc, ML, rowY + ROW_H, ML + CW, rowY + ROW_H, BORDER_LT, 0.4);
   };
