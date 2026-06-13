@@ -446,3 +446,53 @@ export const adminGetKycDocumentFile = async (tenantId, userId, storedAs) => {
   // Delegate to compliance service — same logic, but admin supplies the target userId
   return getKycDocumentFile(userId, tenantId, storedAs);
 };
+
+// ─── Tenant provider credentials ─────────────────────────────────────────────
+
+// No secrets stored in DB for Zoqq — platform creds are in .env.
+// user_id is not sensitive but kept opaque on read for consistency.
+const maskSecrets = (cfg) => cfg ?? {};
+
+export const getProviderCredentials = async (tenantId) => {
+  await getTenant(tenantId);
+  const row = await repo.getTenantProviderCredentials(tenantId);
+  if (!row) return { provider_name: 'manual', config: {} };
+  return { ...row, config: maskSecrets(row.config) };
+};
+
+export const setProviderCredentials = async (tenantId, { providerName, config: cfg }, actorId, req) => {
+  await getTenant(tenantId);
+
+  if (providerName === 'zoqq') {
+    if (!cfg.user_id) {
+      throw new AppError('VALIDATION_ERROR', 'Missing required Zoqq field: user_id', 400);
+    }
+  }
+
+  const row = await repo.upsertTenantProviderCredentials(tenantId, { providerName, config: cfg });
+
+  // Bust routing cache and adapter cache for this tenant
+  const { invalidateZoqqAdapter } = await import('../../providers/ProviderRouter.js');
+  invalidateZoqqAdapter(tenantId);
+  const redisKeys = await redis.keys(`tenant:routing:${tenantId}:*`);
+  if (redisKeys.length) await redis.del(...redisKeys);
+
+  writeAudit({ tenantId, actorId, action: 'tenant.provider_credentials.updated', resourceType: 'tenant', resourceId: tenantId, req });
+
+  return { ...row, config: maskSecrets(row.config) };
+};
+
+export const testProviderCredentials = async (tenantId) => {
+  const row = await repo.getTenantProviderCredentials(tenantId, 'zoqq');
+  if (!row) throw new AppError('NOT_FOUND', 'No Zoqq credentials configured for this tenant', 404);
+
+  const { ZoqqAdapter } = await import('../../providers/zoqq/ZoqqAdapter.js');
+  const adapter = new ZoqqAdapter({ ...row.config, tenant_id: tenantId });
+
+  try {
+    const result = await adapter.onboardTenant({});
+    return { success: true, providerUserId: result.providerCustomerId };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+};

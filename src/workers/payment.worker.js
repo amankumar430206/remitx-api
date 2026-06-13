@@ -4,6 +4,7 @@ import { logger } from '../shared/utils/logger.js';
 import db from '../config/database.js';
 import { creditAccount } from '../modules/accounts/index.js';
 import { assertTransition } from '../modules/payments/payments.stateMachine.js';
+import { resolveProvider } from '../providers/ProviderRouter.js';
 
 const connection = { url: config.redisUrl };
 
@@ -22,35 +23,47 @@ const processDispatch = async (job) => {
   }
 
   const isManual = payment.provider_name === 'manual';
+  const now = new Date();
 
-  // ManualAdapter = internal approval system: complete immediately after approval.
-  // Real providers go to pending_manual_processing for external settlement tracking.
-  const newStatus = isManual ? 'completed' : 'pending_manual_processing';
+  if (isManual) {
+    // ManualAdapter: complete immediately — no external call needed
+    assertTransition(payment.status, 'completed');
+    await db.transaction(async (trx) => {
+      await trx('payments')
+        .where({ id: paymentId, tenant_id: tenantId })
+        .update({ status: 'completed', provider_payment_id: `MAN-${paymentId}`, updated_at: now, completed_at: now });
+      await trx('payment_status_history').insert({
+        tenant_id: tenantId, payment_id: paymentId, status: 'completed',
+        actor_type: 'system', notes: 'Completed via internal manual approval',
+      });
+    });
+    logger.info({ paymentId, tenantId }, 'Payment auto-completed (manual adapter)');
+    return;
+  }
+
+  // Real provider (e.g. Zoqq) — submit to provider and store external reference
+  const provider = await resolveProvider(tenantId, payment.source_currency, payment.dest_currency);
+  const providerResult = await provider.submitPayment({ payment, quote: null });
+
+  const newStatus = providerResult.status === 'completed' ? 'completed' : 'pending_manual_processing';
   assertTransition(payment.status, newStatus);
 
-  const now = new Date();
   await db.transaction(async (trx) => {
     await trx('payments')
       .where({ id: paymentId, tenant_id: tenantId })
       .update({
         status: newStatus,
-        provider_payment_id: `MAN-${paymentId}`,
+        provider_payment_id: providerResult.externalRef,
         updated_at: now,
-        ...(isManual && { completed_at: now }),
+        ...(newStatus === 'completed' && { completed_at: now }),
       });
-
     await trx('payment_status_history').insert({
-      tenant_id: tenantId,
-      payment_id: paymentId,
-      status: newStatus,
-      actor_type: 'system',
-      notes: isManual ? 'Completed via internal manual approval' : 'Dispatched to manual processing queue',
+      tenant_id: tenantId, payment_id: paymentId, status: newStatus,
+      actor_type: 'system', notes: `Dispatched to ${payment.provider_name} — ref: ${providerResult.externalRef}`,
     });
   });
 
-  logger.info({ paymentId, tenantId, newStatus }, isManual
-    ? 'Payment auto-completed (manual adapter — internal approval)'
-    : 'Payment dispatched to manual processing queue');
+  logger.info({ paymentId, tenantId, newStatus, externalRef: providerResult.externalRef }, 'Payment dispatched to provider');
 };
 
 const handlePermanentFailure = async (paymentId, tenantId, errorMsg) => {

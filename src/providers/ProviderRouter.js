@@ -1,16 +1,39 @@
 import { config } from '../config/index.js';
 import redis from '../config/redis.js';
 import { ManualAdapter } from './manual/ManualAdapter.js';
+import { ZoqqAdapter } from './zoqq/ZoqqAdapter.js';
 import { AppError } from '../shared/errors/AppError.js';
 import {
   resolveProviderForCorridor,
   resolveGlobalProviderForCorridor,
   getTenantDefaultProvider,
+  getTenantProviderCredentials,
 } from '../modules/admin/admin.repository.js';
 
+// Static registry for providers with platform-level credentials
 const registry = new Map([
   ['manual', new ManualAdapter()],
 ]);
+
+// Per-tenant Zoqq adapter cache (keyed by tenantId)
+// Cleared when credentials are updated via admin API
+const zoqqAdapterCache = new Map();
+
+export const invalidateZoqqAdapter = (tenantId) => {
+  zoqqAdapterCache.delete(tenantId);
+};
+
+const getZoqqAdapterForTenant = async (tenantId) => {
+  if (zoqqAdapterCache.has(tenantId)) {
+    return zoqqAdapterCache.get(tenantId);
+  }
+  const creds = await getTenantProviderCredentials(tenantId, 'zoqq');
+  if (!creds) return null;
+
+  const adapter = new ZoqqAdapter({ ...creds.config, tenant_id: tenantId });
+  zoqqAdapterCache.set(tenantId, adapter);
+  return adapter;
+};
 
 export const getProvider = (name = config.defaultProvider) => {
   const provider = registry.get(name);
@@ -27,40 +50,41 @@ export const getProvider = (name = config.defaultProvider) => {
  *   2. Global (platform) corridor config
  *   3. DEFAULT_PROVIDER env var
  *   4. 'manual' fallback
- *
- * If the resolved name is not in the provider registry (e.g. 'zoqq' not yet
- * implemented), we gracefully fall back to 'manual' so payments never break.
  */
 export const resolveProviderName = async (tenantId, sourceCurrency, destCurrency) => {
-  // 1. Tenant-specific corridor (exact or source wildcard)
   let name = await resolveProviderForCorridor(tenantId, sourceCurrency, destCurrency);
 
-  // 2. Tenant default provider (any corridor catch-all)
   if (!name) {
     name = await getTenantDefaultProvider(tenantId);
   }
 
-  // 3. Global platform defaults
   if (!name) {
     name = await resolveGlobalProviderForCorridor(sourceCurrency, destCurrency);
   }
 
-  // 4. Env default or hard fallback
   const resolved = name || config.defaultProvider || 'manual';
 
-  // 4. If not in registry, use 'manual' (provider configured but not yet implemented)
+  // Zoqq is handled dynamically — don't fall back if it's explicitly configured
+  if (resolved === 'zoqq') return 'zoqq';
+
   return registry.has(resolved) ? resolved : 'manual';
 };
 
 export const resolveProvider = async (tenantId, sourceCurrency, destCurrency) => {
   const cacheKey = `tenant:routing:${tenantId}:${sourceCurrency}:${destCurrency || 'any'}`;
   const cached = await redis.get(cacheKey);
-  if (cached) {
-    return registry.get(cached) ?? registry.get(config.defaultProvider) ?? registry.get('manual');
+
+  const resolvedName = cached ?? await resolveProviderName(tenantId, sourceCurrency, destCurrency);
+
+  if (!cached) {
+    await redis.setex(cacheKey, 300, resolvedName);
   }
 
-  const resolved = await resolveProviderName(tenantId, sourceCurrency, destCurrency);
-  await redis.setex(cacheKey, 300, resolved);
+  if (resolvedName === 'zoqq') {
+    const adapter = await getZoqqAdapterForTenant(tenantId);
+    if (adapter) return adapter;
+    // Credentials not yet configured — fall back to manual silently
+  }
 
-  return registry.get(resolved) ?? registry.get(config.defaultProvider) ?? registry.get('manual');
+  return registry.get(resolvedName) ?? registry.get(config.defaultProvider) ?? registry.get('manual');
 };

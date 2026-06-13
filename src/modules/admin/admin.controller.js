@@ -327,6 +327,33 @@ export const createPaymentOnBehalf = async (req, res) => {
   res.status(201).json({ success: true, data });
 };
 
+// ─── Tenant provider credentials ─────────────────────────────────────────────
+
+const providerCredentialsSchema = Joi.object({
+  providerName: Joi.string().valid('zoqq', 'manual').required(),
+  // For zoqq: only user_id is stored here — platform credentials live in .env
+  config: Joi.object({
+    user_id: Joi.string().optional(),
+  }).optional().default({}),
+});
+
+export const getProviderCredentials = async (req, res) => {
+  const data = await service.getProviderCredentials(req.params.id);
+  res.json({ success: true, data });
+};
+
+export const setProviderCredentials = async (req, res) => {
+  const { error, value } = providerCredentialsSchema.validate(req.body);
+  if (error) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: error.message } });
+  const data = await service.setProviderCredentials(req.params.id, value, req.user.sub, req);
+  res.json({ success: true, data });
+};
+
+export const testProviderCredentials = async (req, res) => {
+  const data = await service.testProviderCredentials(req.params.id);
+  res.json({ success: true, data });
+};
+
 // ─── KYC document serving ─────────────────────────────────────────────────────
 
 export const serveKycDocument = async (req, res) => {

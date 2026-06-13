@@ -364,6 +364,34 @@ export const listAllReconciliationExceptions = async (trx = db) =>
     .orderBy('report_date', 'desc')
     .limit(200);
 
+// ─── Tenant provider credentials ─────────────────────────────────────────────
+
+export const getTenantProviderCredentials = async (tenantId, providerName = null, trx = db) => {
+  const q = trx('tenant_provider_credentials').where({ tenant_id: tenantId, is_active: true });
+  if (providerName) q.andWhere({ provider_name: providerName });
+  return q.first();
+};
+
+export const upsertTenantProviderCredentials = async (tenantId, { providerName, config: cfg }, trx = db) => {
+  const data = {
+    tenant_id:     tenantId,
+    provider_name: providerName,
+    config:        JSON.stringify(cfg),
+    is_active:     true,
+    updated_at:    new Date(),
+  };
+  const existing = await trx('tenant_provider_credentials').where({ tenant_id: tenantId }).first();
+  if (existing) {
+    const [row] = await trx('tenant_provider_credentials')
+      .where({ tenant_id: tenantId })
+      .update(data)
+      .returning('*');
+    return row;
+  }
+  const [row] = await trx('tenant_provider_credentials').insert(data).returning('*');
+  return row;
+};
+
 // ─── Approval rules seeding ───────────────────────────────────────────────────
 
 export const seedApprovalRules = async (tenantId, trx = db) => {

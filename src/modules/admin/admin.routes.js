@@ -33,6 +33,11 @@ router.post('/fee-config',                             authenticate, authorize('
 router.put('/fee-config/:feeId',                       authenticate, authorize('fees:global'), ctrl.updateGlobalFeeConfig);
 router.delete('/fee-config/:feeId',                    authenticate, authorize('fees:global'), ctrl.deleteGlobalFeeConfig);
 
+// ─── Per-tenant provider credentials (Zoqq etc.) ─────────────────────────────
+router.get('/tenants/:id/provider-credentials',            authenticate, authorize('tenants:view'),   ctrl.getProviderCredentials);
+router.put('/tenants/:id/provider-credentials',            authenticate, authorize('tenants:update'), ctrl.setProviderCredentials);
+router.post('/tenants/:id/provider-credentials/test',      authenticate, authorize('tenants:update'), ctrl.testProviderCredentials);
+
 // ─── Per-tenant default provider ─────────────────────────────────────────────
 router.put('/tenants/:id/default-provider',                authenticate, authorize('tenants:update'), ctrl.setDefaultProvider);
 

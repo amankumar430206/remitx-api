@@ -34,6 +34,13 @@ export const config = {
   jwtAccessTtl: '15m',
   jwtRefreshTtlDays: 30,
 
+  zoqqBaseUrl:      process.env.ZOQQ_BASE_URL      || 'https://api.sandbox.zoqq.com',
+  zoqqApiKey:       process.env.ZOQQ_API_KEY       || '',
+  zoqqProductId:    process.env.ZOQQ_PRODUCT_ID    || '',
+  zoqqClientKey:    process.env.ZOQQ_CLIENT_KEY    || '',
+  zoqqClientSecret: process.env.ZOQQ_CLIENT_SECRET || '',
+  zoqqEmail:        process.env.ZOQQ_EMAIL         || '',
+
   defaultProvider: process.env.DEFAULT_PROVIDER || 'manual',
   defaultFxSpread: parseFloat(process.env.DEFAULT_FX_SPREAD || '0.005'),
   fxCacheTtlSeconds: parseInt(process.env.FX_CACHE_TTL_SECONDS || '10', 10),
