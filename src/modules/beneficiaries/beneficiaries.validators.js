@@ -1,17 +1,36 @@
 import Joi from 'joi';
 
 const PURPOSE_CODES = ['TRADE', 'SUPPLIER', 'SALARY', 'SERVICES', 'CONTRACTOR', 'OTHER'];
+const ENTITY_TYPES  = ['INDIVIDUAL', 'COMPANY'];
+const TRANSFER_METHODS = ['SWIFT', 'LOCAL', 'SEPA', 'ACH', 'WIRE', 'FASTER_PAYMENTS'];
 
-// EU countries that use IBAN (non-exhaustive, key ones)
 const EU_IBAN_COUNTRIES = ['DE', 'FR', 'IT', 'ES', 'NL', 'BE', 'AT', 'PT', 'PL', 'SE', 'DK', 'FI', 'NO', 'CH', 'IE'];
 
 const corridorSchema = Joi.object({
-  name: Joi.string().min(1).max(256).required(),
-  countryCode: Joi.string().length(2).uppercase().required(),
-  currency: Joi.string().length(3).uppercase().required(),
-  bankName: Joi.string().max(256).optional().allow('', null),
+  // ── Entity ──────────────────────────────────────────────────────────────────
+  entityType:  Joi.string().valid(...ENTITY_TYPES).required(),
+  name:        Joi.string().min(1).max(256).required(), // company name OR full display name
+  firstName:   Joi.when('entityType', {
+    is: 'INDIVIDUAL',
+    then: Joi.string().min(1).max(128).optional().allow('', null),
+    otherwise: Joi.string().optional().allow('', null),
+  }),
+  lastName:    Joi.when('entityType', {
+    is: 'INDIVIDUAL',
+    then: Joi.string().min(1).max(128).optional().allow('', null),
+    otherwise: Joi.string().optional().allow('', null),
+  }),
+
+  // ── Corridor ────────────────────────────────────────────────────────────────
+  countryCode:    Joi.string().length(2).uppercase().required(),
+  currency:       Joi.string().length(3).uppercase().required(),
+  purposeCode:    Joi.string().valid(...PURPOSE_CODES).required(),
+  transferMethod: Joi.string().valid(...TRANSFER_METHODS).optional().allow('', null),
+
+  // ── Bank ────────────────────────────────────────────────────────────────────
+  bankName:    Joi.string().max(256).optional().allow('', null),
   bankAddress: Joi.string().max(1024).optional().allow('', null),
-  purposeCode: Joi.string().valid(...PURPOSE_CODES).required(),
+  accountName: Joi.string().max(256).optional().allow('', null),
 
   // US-specific
   routingNumber: Joi.when('countryCode', {
@@ -40,22 +59,22 @@ const corridorSchema = Joi.object({
     otherwise: Joi.string().optional().allow('', null),
   }),
 
-  // IBAN for AE
+  // IBAN
   iban: Joi.when('countryCode', {
     is: 'AE',
     then: Joi.string().pattern(/^AE\d{21}$/).required().messages({
-      'string.pattern.base': 'iban must match AE format: AE followed by 21 digits',
+      'string.pattern.base': 'IBAN must match AE format: AE followed by 21 digits',
     }),
     otherwise: Joi.when('countryCode', {
       is: Joi.valid(...EU_IBAN_COUNTRIES),
       then: Joi.string().pattern(/^[A-Z]{2}\d{2}[A-Z0-9]{4,30}$/).required().messages({
-        'string.pattern.base': 'iban must be a valid IBAN format',
+        'string.pattern.base': 'IBAN must be a valid IBAN format',
       }),
       otherwise: Joi.string().optional().allow('', null),
     }),
   }),
 
-  // account_number: required for US, GB, IN, and OTHER (not EU IBAN countries or AE)
+  // Account number
   accountNumber: Joi.when('countryCode', {
     is: 'US',
     then: Joi.string().pattern(/^\d{4,17}$/).required().messages({
@@ -74,13 +93,13 @@ const corridorSchema = Joi.object({
         otherwise: Joi.when('countryCode', {
           is: Joi.valid('AE', ...EU_IBAN_COUNTRIES),
           then: Joi.string().optional().allow('', null),
-          otherwise: Joi.string().min(1).max(64).required(), // OTHER catch-all
+          otherwise: Joi.string().min(1).max(64).required(),
         }),
       }),
     }),
   }),
 
-  // SWIFT/BIC: required for OTHER (non US/GB/IN/EU/AE), optional elsewhere
+  // SWIFT / BIC
   swiftBic: Joi.when('countryCode', {
     is: Joi.valid('US', 'GB', 'IN', 'AE', ...EU_IBAN_COUNTRIES),
     then: Joi.string().pattern(/^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/).optional().allow('', null),
@@ -88,20 +107,38 @@ const corridorSchema = Joi.object({
       'string.pattern.base': 'swiftBic must be a valid BIC/SWIFT code (8 or 11 characters)',
     }),
   }),
+
+  // ── Address ─────────────────────────────────────────────────────────────────
+  addressLine1: Joi.string().max(256).optional().allow('', null),
+  addressLine2: Joi.string().max(256).optional().allow('', null),
+  city:         Joi.string().max(128).optional().allow('', null),
+  state:        Joi.string().max(128).optional().allow('', null),
+  postalCode:   Joi.string().max(32).optional().allow('', null),
 });
 
 export const createBeneficiarySchema = corridorSchema;
+
 export const updateBeneficiarySchema = Joi.object({
-  name: Joi.string().min(1).max(256).optional(),
-  countryCode: Joi.string().length(2).uppercase().optional(),
-  currency: Joi.string().length(3).uppercase().optional(),
-  bankName: Joi.string().max(256).optional().allow('', null),
-  bankAddress: Joi.string().max(1024).optional().allow('', null),
-  purposeCode: Joi.string().valid(...PURPOSE_CODES).optional(),
-  routingNumber: Joi.string().optional().allow('', null),
-  sortCode: Joi.string().optional().allow('', null),
-  ifscCode: Joi.string().optional().allow('', null),
-  iban: Joi.string().optional().allow('', null),
-  accountNumber: Joi.string().optional().allow('', null),
-  swiftBic: Joi.string().optional().allow('', null),
+  entityType:     Joi.string().valid(...ENTITY_TYPES).optional(),
+  name:           Joi.string().min(1).max(256).optional(),
+  firstName:      Joi.string().max(128).optional().allow('', null),
+  lastName:       Joi.string().max(128).optional().allow('', null),
+  countryCode:    Joi.string().length(2).uppercase().optional(),
+  currency:       Joi.string().length(3).uppercase().optional(),
+  bankName:       Joi.string().max(256).optional().allow('', null),
+  bankAddress:    Joi.string().max(1024).optional().allow('', null),
+  accountName:    Joi.string().max(256).optional().allow('', null),
+  purposeCode:    Joi.string().valid(...PURPOSE_CODES).optional(),
+  transferMethod: Joi.string().valid(...TRANSFER_METHODS).optional().allow('', null),
+  routingNumber:  Joi.string().optional().allow('', null),
+  sortCode:       Joi.string().optional().allow('', null),
+  ifscCode:       Joi.string().optional().allow('', null),
+  iban:           Joi.string().optional().allow('', null),
+  accountNumber:  Joi.string().optional().allow('', null),
+  swiftBic:       Joi.string().optional().allow('', null),
+  addressLine1:   Joi.string().max(256).optional().allow('', null),
+  addressLine2:   Joi.string().max(256).optional().allow('', null),
+  city:           Joi.string().max(128).optional().allow('', null),
+  state:          Joi.string().max(128).optional().allow('', null),
+  postalCode:     Joi.string().max(32).optional().allow('', null),
 });
