@@ -4,7 +4,7 @@ import { resolveProvider } from '../../providers/ProviderRouter.js';
 import { AppError } from '../../shared/errors/AppError.js';
 import * as repo from './accounts.repository.js';
 
-export const provisionAccount = async ({ currency, userId, tenantId }) => {
+export const provisionAccount = async ({ currency, label, userId, tenantId }) => {
   const provider = await resolveProvider(tenantId, currency, currency);
   const providerResult = await provider.createAccount({ currency, userId, tenantId });
 
@@ -12,6 +12,7 @@ export const provisionAccount = async ({ currency, userId, tenantId }) => {
     tenant_id: tenantId,
     user_id: userId,
     currency: currency.toUpperCase(),
+    label: label || null,
     account_number: providerResult.accountNumber,
     provider_name: providerResult.providerName,
     provider_account_id: providerResult.providerAccountId,

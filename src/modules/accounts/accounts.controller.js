@@ -8,6 +8,7 @@ export const provision = async (req, res) => {
   const payload = await validators.provisionAccountSchema.validateAsync(req.body, { abortEarly: false });
   const account = await service.provisionAccount({
     currency: payload.currency,
+    label:    payload.label || null,
     userId: req.user.sub,
     tenantId: req.tenantId,
   });

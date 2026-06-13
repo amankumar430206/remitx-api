@@ -4,6 +4,7 @@ const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'GBP', 'INR', 'AED', 'SGD', 'CAD', '
 
 export const provisionAccountSchema = Joi.object({
   currency: Joi.string().length(3).uppercase().valid(...SUPPORTED_CURRENCIES).required(),
+  label:    Joi.string().max(128).optional().allow(''),
 });
 
 export const ledgerQuerySchema = Joi.object({
