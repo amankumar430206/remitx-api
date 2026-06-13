@@ -5,6 +5,11 @@ import { AppError } from '../../shared/errors/AppError.js';
 import * as repo from './accounts.repository.js';
 
 export const provisionAccount = async ({ currency, label, userId, tenantId }) => {
+  const existing = await repo.findAccountByCurrency(userId, tenantId, currency.toUpperCase());
+  if (existing) {
+    throw new AppError('DUPLICATE_ACCOUNT', `A ${currency.toUpperCase()} account already exists`, 409);
+  }
+
   const provider = await resolveProvider(tenantId, currency, currency);
   const providerResult = await provider.createAccount({ currency, userId, tenantId });
 

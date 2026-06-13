@@ -8,6 +8,9 @@ export const createAccount = async (data, trx = db) => {
 export const findAccountById = async (id, tenantId, trx = db) =>
   trx('accounts').where({ id, tenant_id: tenantId, status: 'active' }).first();
 
+export const findAccountByCurrency = async (userId, tenantId, currency, trx = db) =>
+  trx('accounts').where({ user_id: userId, tenant_id: tenantId, currency, status: 'active' }).first();
+
 export const listAccounts = async (tenantId, userIds, trx = db) => {
   const q = trx('accounts').where({ tenant_id: tenantId, status: 'active' });
   if (userIds && userIds.length > 0) q.whereIn('user_id', userIds);
