@@ -176,11 +176,6 @@ export const createFeeConfig = async (req, res) => {
   if (!value.inheritGlobal && (!value.feeType || value.feeValue === undefined)) {
     return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: '"feeType" and "feeValue" are required when inheritGlobal is false' } });
   }
-  // transaction fees require at least a source currency
-  const isTransaction = ['transaction_send', 'transaction_receive'].includes(value.feeCategory);
-  if (isTransaction && !value.sourceCurrency) {
-    return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: '"sourceCurrency" is required for transaction fees' } });
-  }
   const data = await service.createFeeConfig(req.params.id, value, req.user.sub, req);
   res.status(201).json({ success: true, data });
 };
@@ -208,10 +203,6 @@ export const listGlobalFeeConfigs = async (req, res) => {
 export const createGlobalFeeConfig = async (req, res) => {
   const { error, value } = globalFeeConfigSchema.validate(req.body);
   if (error) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: error.message } });
-  const isTransaction = ['transaction_send', 'transaction_receive'].includes(value.feeCategory);
-  if (isTransaction && !value.sourceCurrency) {
-    return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: '"sourceCurrency" is required for transaction fees' } });
-  }
   const data = await service.createGlobalFeeConfig(value, req.user.sub, req);
   res.status(201).json({ success: true, data });
 };
