@@ -6,6 +6,7 @@ import * as ctrl from './accounts.controller.js';
 
 const router = Router();
 
+router.get('/fee-preview', authenticate, authorize('accounts:view'), ctrl.feePreview);
 router.post('/', authenticate, authorize('accounts:create'), ctrl.provision);
 router.get('/', authenticate, authorize('accounts:view'), ctrl.list);
 router.get('/:id', authenticate, authorize('accounts:view'), validateUUID('id'), ctrl.getOne);

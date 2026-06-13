@@ -1,6 +1,7 @@
 import * as service from './accounts.service.js';
 import * as validators from './accounts.validators.js';
 import { getSubtreeUserIds } from '../../shared/utils/subtree.js';
+import { resolveFeeByCategory } from '../admin/index.js';
 
 const ADMIN_ROLES = new Set(['super_admin', 'client_admin']);
 
@@ -43,4 +44,17 @@ export const getLedger = async (req, res) => {
   const query = await validators.ledgerQuerySchema.validateAsync(req.query, { abortEarly: false });
   const result = await service.getLedger(req.params.id, req.tenantId, req.user.sub, query, req.user.role);
   res.json({ success: true, data: result.data, meta: result.meta, requestId: req.id });
+};
+
+export const feePreview = async (req, res) => {
+  const activation = await resolveFeeByCategory(req.tenantId, 'account_activation');
+  const ibanCreation = await resolveFeeByCategory(req.tenantId, 'iban_creation');
+  res.json({
+    success: true,
+    data: {
+      account_activation: { ...activation },
+      iban_creation:      { ...ibanCreation },
+    },
+    requestId: req.id,
+  });
 };
