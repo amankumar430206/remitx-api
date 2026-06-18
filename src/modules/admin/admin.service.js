@@ -273,8 +273,10 @@ export const addSingleCorridorConfig = async (tenantId, corridor, actorId, req) 
   await getTenant(tenantId);
   const row = await repo.upsertCorridorConfig(tenantId, corridor);
   // Invalidate per-corridor routing cache keys for this tenant
-  await redis.del(`tenant:routing:${tenantId}:${corridor.sourceCurrency.toUpperCase()}:${corridor.destCurrency?.toUpperCase() || 'any'}`);
-  await redis.del(`tenant:routing:${tenantId}:${corridor.sourceCurrency.toUpperCase()}:any`);
+  const src = corridor.sourceCurrency?.toUpperCase() || 'any';
+  const dst = corridor.destCurrency?.toUpperCase() || 'any';
+  await redis.del(`tenant:routing:${tenantId}:${src}:${dst}`);
+  await redis.del(`tenant:routing:${tenantId}:${src}:any`);
   writeAudit({ tenantId, actorId, action: 'provider_config.corridor_added', resourceType: 'tenant', resourceId: tenantId, req });
   return row;
 };
