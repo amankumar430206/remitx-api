@@ -15,8 +15,8 @@ const updateTenantSchema = Joi.object({
 });
 
 const corridorSchema = Joi.array().items(Joi.object({
-  sourceCurrency: Joi.string().length(3).uppercase().required(),
-  destCurrency: Joi.string().length(3).uppercase().optional().allow(null),
+  sourceCurrency: Joi.string().length(3).uppercase().optional().allow(null, ''),
+  destCurrency: Joi.string().length(3).uppercase().optional().allow(null, ''),
   providerName: Joi.string().max(64).required(),
   priority: Joi.number().integer().min(1).optional(),
 })).min(1).required();
@@ -26,7 +26,7 @@ const defaultProviderSchema = Joi.object({
 });
 
 const singleCorridorSchema = Joi.object({
-  sourceCurrency: Joi.string().length(3).uppercase().required(),
+  sourceCurrency: Joi.string().length(3).uppercase().optional().allow(null, ''),
   destCurrency: Joi.string().length(3).uppercase().optional().allow(null, ''),
   providerName: Joi.string().max(64).required(),
   priority: Joi.number().integer().min(1).optional(),

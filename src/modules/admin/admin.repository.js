@@ -96,19 +96,30 @@ export const getCorridorConfigs = async (tenantId, trx = db) =>
     .orderBy('priority', 'asc');
 
 export const upsertCorridorConfig = async (tenantId, { sourceCurrency, destCurrency, providerName, priority }, trx = db) => {
+  const src = sourceCurrency ? sourceCurrency.toUpperCase() : null;
+  const dst = destCurrency  ? destCurrency.toUpperCase()  : null;
   const data = {
     tenant_id: tenantId,
-    source_currency: sourceCurrency.toUpperCase(),
-    dest_currency: destCurrency ? destCurrency.toUpperCase() : null,
+    source_currency: src,
+    dest_currency: dst,
     provider_name: providerName,
     priority: priority ?? 1,
     is_active: true,
   };
-  const [row] = await trx('provider_corridor_configs')
-    .insert(data)
-    .onConflict(['tenant_id', 'source_currency', 'dest_currency'])
-    .merge()
-    .returning('*');
+  // Use COALESCE-aware lookup because .onConflict doesn't handle NULLs reliably
+  const existing = await trx('provider_corridor_configs')
+    .where({ tenant_id: tenantId, is_active: true })
+    .whereRaw("COALESCE(source_currency, '') = ?", [src ?? ''])
+    .whereRaw("COALESCE(dest_currency,   '') = ?", [dst ?? ''])
+    .first();
+  if (existing) {
+    const [row] = await trx('provider_corridor_configs')
+      .where({ id: existing.id })
+      .update({ ...data, updated_at: new Date() })
+      .returning('*');
+    return row;
+  }
+  const [row] = await trx('provider_corridor_configs').insert(data).returning('*');
   return row;
 };
 
@@ -116,20 +127,29 @@ export const deleteCorridorById = async (corridorId, tenantId, trx = db) =>
   trx('provider_corridor_configs').where({ id: corridorId, tenant_id: tenantId }).delete();
 
 export const resolveProviderForCorridor = async (tenantId, sourceCurrency, destCurrency, trx = db) => {
-  // Exact match first
+  // 1. Exact match (specific source → specific dest)
   const exact = await trx('provider_corridor_configs')
     .where({ tenant_id: tenantId, source_currency: sourceCurrency, dest_currency: destCurrency, is_active: true })
     .orderBy('priority', 'asc')
     .first();
   if (exact) return exact.provider_name;
 
-  // Wildcard (dest_currency IS NULL)
-  const wildcard = await trx('provider_corridor_configs')
+  // 2. Wildcard dest (specific source → any dest)
+  const wildcardDest = await trx('provider_corridor_configs')
     .where({ tenant_id: tenantId, source_currency: sourceCurrency, is_active: true })
     .whereNull('dest_currency')
     .orderBy('priority', 'asc')
     .first();
-  if (wildcard) return wildcard.provider_name;
+  if (wildcardDest) return wildcardDest.provider_name;
+
+  // 3. Any-to-any (null source → null dest)
+  const anyToAny = await trx('provider_corridor_configs')
+    .where({ tenant_id: tenantId, is_active: true })
+    .whereNull('source_currency')
+    .whereNull('dest_currency')
+    .orderBy('priority', 'asc')
+    .first();
+  if (anyToAny) return anyToAny.provider_name;
 
   return null;
 };
@@ -150,6 +170,7 @@ export const getGlobalCorridorConfigs = async (trx = db) =>
     .orderBy('p.priority', 'asc');
 
 export const resolveGlobalProviderForCorridor = async (sourceCurrency, destCurrency, trx = db) => {
+  // 1. Exact match
   const exact = await trx('provider_corridor_configs as p')
     .join('tenants as t', 't.id', '=', 'p.tenant_id')
     .where({ 't.slug': 'remitx', 'p.source_currency': sourceCurrency, 'p.dest_currency': destCurrency, 'p.is_active': true })
@@ -158,14 +179,26 @@ export const resolveGlobalProviderForCorridor = async (sourceCurrency, destCurre
     .first();
   if (exact) return exact.provider_name;
 
-  const wildcard = await trx('provider_corridor_configs as p')
+  // 2. Wildcard dest
+  const wildcardDest = await trx('provider_corridor_configs as p')
     .join('tenants as t', 't.id', '=', 'p.tenant_id')
     .where({ 't.slug': 'remitx', 'p.source_currency': sourceCurrency, 'p.is_active': true })
     .whereNull('p.dest_currency')
     .orderBy('p.priority', 'asc')
     .select('p.provider_name')
     .first();
-  return wildcard?.provider_name ?? null;
+  if (wildcardDest) return wildcardDest.provider_name;
+
+  // 3. Any-to-any
+  const anyToAny = await trx('provider_corridor_configs as p')
+    .join('tenants as t', 't.id', '=', 'p.tenant_id')
+    .where({ 't.slug': 'remitx', 'p.is_active': true })
+    .whereNull('p.source_currency')
+    .whereNull('p.dest_currency')
+    .orderBy('p.priority', 'asc')
+    .select('p.provider_name')
+    .first();
+  return anyToAny?.provider_name ?? null;
 };
 
 // ─── Fee configs ─────────────────────────────────────────────────────────────
