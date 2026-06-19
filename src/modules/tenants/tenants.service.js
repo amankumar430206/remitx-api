@@ -397,11 +397,12 @@ export const createRole = async (tenantId, { name, key, description, permissions
   return { role: roleKey, key: roleKey, name: name.trim(), description: description ?? null, isSystem: false, permissions, userCount: 0 };
 };
 
-export const updateRole = async (tenantId, key, { name, description, permissions }, actorId) => {
+export const updateRole = async (tenantId, key, { name, description, permissions }, actorId, actorPermissions = []) => {
   const role = await repo.findRoleByKey(tenantId, key);
   if (!role) throw new AppError('NOT_FOUND', 'Role not found', 404);
 
-  if (role.is_system) {
+  const isSuperAdmin = actorPermissions.includes('*:*');
+  if (role.is_system && !isSuperAdmin) {
     throw new AppError('FORBIDDEN', 'System roles cannot be modified. Create a custom role instead.', 403);
   }
 
