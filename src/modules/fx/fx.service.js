@@ -3,6 +3,7 @@ import redis from '../../config/redis.js';
 import { config } from '../../config/index.js';
 import { AppError } from '../../shared/errors/AppError.js';
 import { applySpread, multiply } from '../../shared/utils/money.js';
+import { resolveProviderName, resolveProvider } from '../../providers/ProviderRouter.js';
 
 const COMMON_PAIRS = [
   ['USD', 'EUR'], ['USD', 'GBP'], ['USD', 'INR'], ['USD', 'AED'],
@@ -52,15 +53,50 @@ export const getLiveRate = async (from, to) => {
   return rate;
 };
 
-export const getRatesForPairs = async (pairs = COMMON_PAIRS) => {
-  const results = await Promise.all(
+const fetchZoqqRate = async (adapter, from, to) => {
+  const cacheKey = `fx:rate:zoqq:${from}:${to}`;
+  const cached = await redis.get(cacheKey);
+  if (cached) return cached;
+  const result = await adapter.getLiveRate({ sourceCurrency: from, targetCurrency: to });
+  const rate = String(result.rate);
+  await redis.setex(cacheKey, config.fxCacheTtlSeconds, rate);
+  return rate;
+};
+
+const resolveZoqqAdapter = async (tenantId) => {
+  if (!tenantId) return null;
+  try {
+    const name = await resolveProviderName(tenantId, null, null);
+    if (name !== 'zoqq') return null;
+    const adapter = await resolveProvider(tenantId, null, null);
+    return adapter?.name === 'zoqq' ? adapter : null;
+  } catch {
+    return null;
+  }
+};
+
+export const getRatesForPairs = async (tenantId, pairs = COMMON_PAIRS) => {
+  const zoqqAdapter = await resolveZoqqAdapter(tenantId);
+  const provider = zoqqAdapter ? 'zoqq' : 'market';
+
+  const rates = await Promise.all(
     pairs.map(async ([from, to]) => {
-      const midRate = await getLiveRate(from, to);
+      let midRate;
+      if (zoqqAdapter) {
+        try {
+          midRate = await fetchZoqqRate(zoqqAdapter, from, to);
+        } catch {
+          midRate = await getLiveRate(from, to);
+        }
+      } else {
+        midRate = await getLiveRate(from, to);
+      }
       const clientRate = applySpread(midRate, config.defaultFxSpread);
       return { from, to, midRate, clientRate };
     }),
   );
-  return results;
+
+  return { rates, provider };
 };
 
 export const lockQuote = async (tenantId, from, to, fromAmount) => {
