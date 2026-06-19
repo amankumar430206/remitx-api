@@ -101,6 +101,16 @@ export const PERMISSION_CATALOG = [
       { key: 'admin:*', label: 'Full admin access', wildcard: true },
     ],
   },
+  {
+    domain: 'nav',
+    label: 'Sidebar Navigation',
+    permissions: [
+      { key: 'fx_rates:view',  label: 'View FX Rates page' },
+      { key: 'network:view',   label: 'View Network page' },
+      { key: 'kyc:view',       label: 'View KYC page' },
+      { key: 'assistant:view', label: 'View AI Assistant page' },
+    ],
+  },
 ];
 
 // Flat set of every valid permission key, for O(1) validation.

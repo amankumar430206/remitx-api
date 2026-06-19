@@ -28,16 +28,19 @@ const DEFAULT_THEME = {
 //   user         → regular client user
 // Everything else (maker, checker, sub-client roles) is an optional TEMPLATE that
 // a super admin or client admin can instantiate on demand from the UI.
+const NAV_ALL  = ['fx_rates:view', 'network:view', 'kyc:view', 'assistant:view'];
+const NAV_USER = ['fx_rates:view', 'network:view', 'kyc:view', 'assistant:view'];
+
 export const CORE_ROLES = {
   client_admin: {
     name: 'Client Admin',
     description: 'Administers the client workspace — manages users, roles, beneficiaries, and payments.',
-    permissions: ['payments:*', 'beneficiaries:*', 'accounts:*', 'users:*', 'subclients:*', 'reports:*', 'admin:config'],
+    permissions: ['payments:*', 'beneficiaries:*', 'accounts:*', 'users:*', 'subclients:*', 'reports:*', 'admin:config', ...NAV_ALL],
   },
   user: {
     name: 'User',
     description: 'Regular client user — creates payments and manages beneficiaries.',
-    permissions: ['payments:create', 'payments:view', 'beneficiaries:view', 'beneficiaries:create', 'accounts:view', 'reports:view'],
+    permissions: ['payments:create', 'payments:view', 'beneficiaries:view', 'beneficiaries:create', 'accounts:view', 'reports:view', ...NAV_USER],
   },
 };
 
@@ -47,22 +50,22 @@ export const ROLE_TEMPLATES = {
   maker: {
     name: 'Maker',
     description: 'Creates and cancels payments; cannot approve.',
-    permissions: ['payments:create', 'payments:cancel', 'beneficiaries:create', 'accounts:view', 'reports:view'],
+    permissions: ['payments:create', 'payments:cancel', 'beneficiaries:create', 'accounts:view', 'reports:view', ...NAV_USER],
   },
   checker: {
     name: 'Checker',
     description: 'Approves payments and views reports; cannot create payments.',
-    permissions: ['payments:approve', 'payments:view_all', 'accounts:view', 'reports:view', 'reports:export'],
+    permissions: ['payments:approve', 'payments:view_all', 'accounts:view', 'reports:view', 'reports:export', ...NAV_USER],
   },
   subclient_admin: {
     name: 'Sub-client Admin',
     description: 'Administers a sub-client and its users.',
-    permissions: ['payments:create', 'payments:approve', 'beneficiaries:*', 'accounts:create', 'accounts:view', 'users:invite', 'reports:view'],
+    permissions: ['payments:create', 'payments:approve', 'beneficiaries:*', 'accounts:create', 'accounts:view', 'users:invite', 'reports:view', ...NAV_USER],
   },
   subclient_user: {
     name: 'Sub-client User',
     description: 'Day-to-day sub-client operations.',
-    permissions: ['payments:create', 'beneficiaries:create', 'accounts:view'],
+    permissions: ['payments:create', 'beneficiaries:create', 'accounts:view', ...NAV_USER],
   },
 };
 
