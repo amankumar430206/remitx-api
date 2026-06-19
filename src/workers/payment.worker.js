@@ -43,7 +43,26 @@ const processDispatch = async (job) => {
 
   // Real provider (e.g. Zoqq) — submit to provider and store external reference
   const provider = await resolveProvider(tenantId, payment.source_currency, payment.dest_currency);
-  const providerResult = await provider.submitPayment({ payment, quote: null });
+
+  // Lock a fresh provider quote immediately before dispatch.
+  // Zoqq requires a quoteId on every payout. We can't lock it at submission time
+  // because Zoqq quotes expire in 15 min and approval can take much longer.
+  let dispatchQuote = null;
+  if (typeof provider.getQuote === 'function') {
+    try {
+      dispatchQuote = await provider.getQuote({
+        sourceCurrency: payment.source_currency,
+        targetCurrency: payment.dest_currency,
+        amount: String(payment.source_amount),
+      });
+      logger.info({ paymentId, providerQuoteId: dispatchQuote.providerQuoteId }, 'Provider quote locked for dispatch');
+    } catch (err) {
+      logger.error({ paymentId, err: err.message }, 'Failed to lock provider quote — aborting dispatch');
+      throw err;
+    }
+  }
+
+  const providerResult = await provider.submitPayment({ payment, quote: dispatchQuote });
 
   const newStatus = providerResult.status === 'completed' ? 'completed' : 'pending_manual_processing';
   assertTransition(payment.status, newStatus);
