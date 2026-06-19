@@ -23,6 +23,12 @@ export class ZoqqAdapter extends IPaymentProvider {
 
   get name() { return 'zoqq'; }
 
+  // ─── Connectivity ─────────────────────────────────────────────────────────
+
+  async ping() {
+    await this.client.request('GET', '/zoqq/api/v1/user');
+  }
+
   // ─── FX ──────────────────────────────────────────────────────────────────
 
   async getLiveRate({ sourceCurrency, targetCurrency }) {

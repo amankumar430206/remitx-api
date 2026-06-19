@@ -75,22 +75,36 @@ const resolveZoqqAdapter = async (tenantId) => {
   }
 };
 
+// Cached Zoqq connectivity check — avoids discovering unreachability mid-flow.
+// Result is cached 120 s: 'ok' or 'fail'. On failure the caller falls back to
+// market rates so the payment flow stays functional.
+const ZOQQ_PING_TTL = 120;
+
+const isZoqqReachable = async (adapter, tenantId) => {
+  const key = `zoqq:ping:${tenantId}`;
+  const cached = await redis.get(key);
+  if (cached === 'ok')   return true;
+  if (cached === 'fail') return false;
+  try {
+    await adapter.ping();
+    await redis.setex(key, ZOQQ_PING_TTL, 'ok');
+    return true;
+  } catch {
+    await redis.setex(key, ZOQQ_PING_TTL, 'fail');
+    return false;
+  }
+};
+
 export const getRatesForPairs = async (tenantId, pairs = COMMON_PAIRS) => {
   const zoqqAdapter = await resolveZoqqAdapter(tenantId);
-  const provider = zoqqAdapter ? 'zoqq' : 'market';
+  const zoqqOk      = zoqqAdapter ? await isZoqqReachable(zoqqAdapter, tenantId) : false;
+  const provider    = zoqqOk ? 'zoqq' : 'market';
 
   const rates = await Promise.all(
     pairs.map(async ([from, to]) => {
-      let midRate;
-      if (zoqqAdapter) {
-        try {
-          midRate = await fetchZoqqRate(zoqqAdapter, from, to);
-        } catch {
-          midRate = await getLiveRate(from, to);
-        }
-      } else {
-        midRate = await getLiveRate(from, to);
-      }
+      const midRate = zoqqOk
+        ? await fetchZoqqRate(zoqqAdapter, from, to).catch(() => getLiveRate(from, to))
+        : await getLiveRate(from, to);
       const clientRate = applySpread(midRate, config.defaultFxSpread);
       return { from, to, midRate, clientRate };
     }),
@@ -118,31 +132,22 @@ export const lockQuote = async (tenantId, from, to, fromAmount, { quoteType, loc
   let toAmount, rate, midRate, spread, providerQuoteId;
   let ttlSeconds = config.fxQuoteTtlSeconds;
 
-  if (zoqqAdapter) {
-    // Use Zoqq's quote API — locks the rate on their side and returns providerQuoteId.
-    // Falls back to market rate if Zoqq is unreachable (e.g. IP not yet whitelisted).
-    try {
-      const zoqqResult = await zoqqAdapter.getQuote({
-        sourceCurrency:    fromUpper,
-        targetCurrency:    toUpper,
-        amount:            fromAmount,
-        quoteType,
-        lockPeriod,
-        conversionSchedule,
-      });
-      rate            = zoqqResult.rate;
-      toAmount        = zoqqResult.destinationAmount ?? multiply(fromAmount, rate);
-      providerQuoteId = zoqqResult.providerQuoteId;
-      midRate         = rate;
-      spread          = '0';
-      ttlSeconds      = lockPeriod ? (LOCK_PERIOD_SECONDS[lockPeriod] ?? config.fxQuoteTtlSeconds) : config.fxQuoteTtlSeconds;
-    } catch (zoqqErr) {
-      // Zoqq unreachable — fall through to market rate so the flow isn't completely broken
-      midRate  = await getLiveRate(fromUpper, toUpper);
-      spread   = config.defaultFxSpread;
-      rate     = applySpread(midRate, spread);
-      toAmount = multiply(fromAmount, rate);
-    }
+  if (zoqqAdapter && await isZoqqReachable(zoqqAdapter, tenantId)) {
+    // Zoqq is reachable — lock the rate on their side
+    const zoqqResult = await zoqqAdapter.getQuote({
+      sourceCurrency:    fromUpper,
+      targetCurrency:    toUpper,
+      amount:            fromAmount,
+      quoteType,
+      lockPeriod,
+      conversionSchedule,
+    });
+    rate            = zoqqResult.rate;
+    toAmount        = zoqqResult.destinationAmount ?? multiply(fromAmount, rate);
+    providerQuoteId = zoqqResult.providerQuoteId;
+    midRate         = rate;
+    spread          = '0';
+    ttlSeconds      = lockPeriod ? (LOCK_PERIOD_SECONDS[lockPeriod] ?? config.fxQuoteTtlSeconds) : config.fxQuoteTtlSeconds;
   } else {
     // In-house market rate calculation
     midRate  = await getLiveRate(fromUpper, toUpper);
