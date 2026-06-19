@@ -99,35 +99,85 @@ export const getRatesForPairs = async (tenantId, pairs = COMMON_PAIRS) => {
   return { rates, provider };
 };
 
-export const lockQuote = async (tenantId, from, to, fromAmount) => {
-  const midRate = await getLiveRate(from.toUpperCase(), to.toUpperCase());
-  const spread = config.defaultFxSpread;
-  const clientRate = applySpread(midRate, spread);
-  const toAmount = multiply(fromAmount, clientRate);
+// Map Zoqq lockPeriod enum → seconds for Redis TTL
+const LOCK_PERIOD_SECONDS = {
+  '5_mins':   5 * 60,
+  '15_mins':  15 * 60,
+  '1_hour':   60 * 60,
+  '4_hours':  4 * 60 * 60,
+  '8_hours':  8 * 60 * 60,
+  '24_hours': 24 * 60 * 60,
+};
 
-  const quoteId = uuidv4();
-  const expiresAt = new Date(Date.now() + config.fxQuoteTtlSeconds * 1000).toISOString();
+export const lockQuote = async (tenantId, from, to, fromAmount, { quoteType, lockPeriod, conversionSchedule } = {}) => {
+  const fromUpper = from.toUpperCase();
+  const toUpper   = to.toUpperCase();
+
+  const zoqqAdapter = await resolveZoqqAdapter(tenantId);
+
+  let toAmount, rate, midRate, spread, providerQuoteId;
+  let ttlSeconds = config.fxQuoteTtlSeconds;
+
+  if (zoqqAdapter) {
+    // Use Zoqq's quote API — locks the rate on their side and returns providerQuoteId
+    const zoqqResult = await zoqqAdapter.getQuote({
+      sourceCurrency:    fromUpper,
+      targetCurrency:    toUpper,
+      amount:            fromAmount,
+      quoteType,
+      lockPeriod,
+      conversionSchedule,
+    });
+    rate            = zoqqResult.rate;
+    toAmount        = zoqqResult.destinationAmount ?? multiply(fromAmount, rate);
+    providerQuoteId = zoqqResult.providerQuoteId;
+    midRate         = rate;
+    spread          = '0';
+    ttlSeconds      = lockPeriod ? (LOCK_PERIOD_SECONDS[lockPeriod] ?? config.fxQuoteTtlSeconds) : config.fxQuoteTtlSeconds;
+  } else {
+    // In-house market rate calculation
+    midRate  = await getLiveRate(fromUpper, toUpper);
+    spread   = config.defaultFxSpread;
+    rate     = applySpread(midRate, spread);
+    toAmount = multiply(fromAmount, rate);
+  }
+
+  const quoteId  = uuidv4();
+  const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
 
   const quote = {
     quoteId,
     tenantId,
-    from: from.toUpperCase(),
-    to: to.toUpperCase(),
+    from: fromUpper,
+    to:   toUpper,
     fromAmount: String(fromAmount),
-    toAmount,
-    rate: clientRate,
+    toAmount:   String(toAmount),
+    rate,
     midRate,
     spread: String(spread),
     expiresAt,
+    // Zoqq-specific — only present when provider is Zoqq
+    ...(providerQuoteId   && { providerQuoteId }),
+    ...(quoteType         && { quoteType }),
+    ...(lockPeriod        && { lockPeriod }),
+    ...(conversionSchedule && { conversionSchedule }),
   };
 
-  await redis.setex(
-    `fxquote:${quoteId}`,
-    config.fxQuoteTtlSeconds,
-    JSON.stringify(quote),
-  );
+  await redis.setex(`fxquote:${quoteId}`, ttlSeconds, JSON.stringify(quote));
 
-  return quote;
+  return {
+    quoteId,
+    from:       quote.from,
+    to:         quote.to,
+    fromAmount: quote.fromAmount,
+    toAmount:   quote.toAmount,
+    rate:       quote.rate,
+    spread:     quote.spread,
+    expiresAt:  quote.expiresAt,
+    ...(quoteType          && { quoteType }),
+    ...(lockPeriod         && { lockPeriod }),
+    ...(conversionSchedule  && { conversionSchedule }),
+  };
 };
 
 export const consumeFxQuote = async (quoteId, tenantId) => {

@@ -41,8 +41,15 @@ export const submitPayment = async (payload, userId, tenantId, idempotencyKey, r
   // Validate beneficiary
   const beneficiary = await getBeneficiaryOrThrow(beneficiaryId, tenantId);
 
-  // Consume FX quote (one-time use)
+  // Consume FX quote (one-time use) — returns full quote including Zoqq metadata
   const quote = await consumeFxQuote(quoteId, tenantId);
+
+  // Capture Zoqq-specific fields for the payment record (quote is deleted from Redis after this)
+  const providerMetadata = {};
+  if (quote.providerQuoteId)    providerMetadata.providerQuoteId    = quote.providerQuoteId;
+  if (quote.quoteType)          providerMetadata.quoteType          = quote.quoteType;
+  if (quote.lockPeriod)         providerMetadata.lockPeriod         = quote.lockPeriod;
+  if (quote.conversionSchedule) providerMetadata.conversionSchedule = quote.conversionSchedule;
 
   // Validate account belongs to user and has sufficient balance
   const balance = await getAccountBalance(accountId, tenantId);
@@ -91,6 +98,7 @@ export const submitPayment = async (payload, userId, tenantId, idempotencyKey, r
     status: initialStatus,
     note: note || null,
     scheduled_payment_id: scheduledPaymentId || null,
+    provider_metadata: Object.keys(providerMetadata).length > 0 ? JSON.stringify(providerMetadata) : null,
   };
 
   const payment = await db.transaction(async (trx) => {

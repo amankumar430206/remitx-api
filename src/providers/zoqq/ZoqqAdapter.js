@@ -33,15 +33,15 @@ export class ZoqqAdapter extends IPaymentProvider {
     return mapLiveRate(res, sourceCurrency, targetCurrency);
   }
 
-  async getQuote({ sourceCurrency, targetCurrency, amount }) {
+  async getQuote({ sourceCurrency, targetCurrency, amount, quoteType, lockPeriod, conversionSchedule }) {
     const res = await this.client.request('POST', '/zoqq/api/v1/transfer/quote', {
-      quoteType:              'conversion',
-      lockPeriod:             '15_mins',
-      conversionSchedule:     'immediate',
-      sourceCurrencyCode:     sourceCurrency,
+      quoteType:               quoteType          ?? 'payout',
+      lockPeriod:              lockPeriod         ?? '15_mins',
+      conversionSchedule:      conversionSchedule ?? 'immediate',
+      sourceCurrencyCode:      sourceCurrency,
       destinationCurrencyCode: targetCurrency,
-      sourceAmount:           Number(amount),
-      destinationAmount:      null,
+      sourceAmount:            Number(amount),
+      destinationAmount:       null,
     }, uuidv4());
     return mapQuote(res, sourceCurrency, targetCurrency, config.fxQuoteTtlSeconds);
   }

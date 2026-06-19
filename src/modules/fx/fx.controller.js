@@ -7,12 +7,16 @@ export const getRates = async (req, res) => {
 };
 
 export const createQuote = async (req, res) => {
-  const { from, to, fromAmount } = await lockQuoteSchema.validateAsync(req.body, { abortEarly: false });
-  const quote = await service.lockQuote(req.tenantId, from, to, fromAmount);
+  const { from, to, fromAmount, quoteType, lockPeriod, conversionSchedule } =
+    await lockQuoteSchema.validateAsync(req.body, { abortEarly: false });
+  const quote = await service.lockQuote(
+    req.user.tenantId, from, to, fromAmount,
+    { quoteType, lockPeriod, conversionSchedule },
+  );
   res.status(201).json({ success: true, data: quote, requestId: req.id });
 };
 
 export const getQuote = async (req, res) => {
-  const quote = await service.getQuoteById(req.params.id, req.tenantId);
+  const quote = await service.getQuoteById(req.params.id, req.user.tenantId);
   res.json({ success: true, data: quote, requestId: req.id });
 };
