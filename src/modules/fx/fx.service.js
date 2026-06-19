@@ -119,21 +119,30 @@ export const lockQuote = async (tenantId, from, to, fromAmount, { quoteType, loc
   let ttlSeconds = config.fxQuoteTtlSeconds;
 
   if (zoqqAdapter) {
-    // Use Zoqq's quote API — locks the rate on their side and returns providerQuoteId
-    const zoqqResult = await zoqqAdapter.getQuote({
-      sourceCurrency:    fromUpper,
-      targetCurrency:    toUpper,
-      amount:            fromAmount,
-      quoteType,
-      lockPeriod,
-      conversionSchedule,
-    });
-    rate            = zoqqResult.rate;
-    toAmount        = zoqqResult.destinationAmount ?? multiply(fromAmount, rate);
-    providerQuoteId = zoqqResult.providerQuoteId;
-    midRate         = rate;
-    spread          = '0';
-    ttlSeconds      = lockPeriod ? (LOCK_PERIOD_SECONDS[lockPeriod] ?? config.fxQuoteTtlSeconds) : config.fxQuoteTtlSeconds;
+    // Use Zoqq's quote API — locks the rate on their side and returns providerQuoteId.
+    // Falls back to market rate if Zoqq is unreachable (e.g. IP not yet whitelisted).
+    try {
+      const zoqqResult = await zoqqAdapter.getQuote({
+        sourceCurrency:    fromUpper,
+        targetCurrency:    toUpper,
+        amount:            fromAmount,
+        quoteType,
+        lockPeriod,
+        conversionSchedule,
+      });
+      rate            = zoqqResult.rate;
+      toAmount        = zoqqResult.destinationAmount ?? multiply(fromAmount, rate);
+      providerQuoteId = zoqqResult.providerQuoteId;
+      midRate         = rate;
+      spread          = '0';
+      ttlSeconds      = lockPeriod ? (LOCK_PERIOD_SECONDS[lockPeriod] ?? config.fxQuoteTtlSeconds) : config.fxQuoteTtlSeconds;
+    } catch (zoqqErr) {
+      // Zoqq unreachable — fall through to market rate so the flow isn't completely broken
+      midRate  = await getLiveRate(fromUpper, toUpper);
+      spread   = config.defaultFxSpread;
+      rate     = applySpread(midRate, spread);
+      toAmount = multiply(fromAmount, rate);
+    }
   } else {
     // In-house market rate calculation
     midRate  = await getLiveRate(fromUpper, toUpper);
