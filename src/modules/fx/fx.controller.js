@@ -2,7 +2,7 @@ import * as service from './fx.service.js';
 import { lockQuoteSchema } from './fx.validators.js';
 
 export const getRates = async (req, res) => {
-  const { rates, provider } = await service.getRatesForPairs(req.tenantId);
+  const { rates, provider } = await service.getRatesForPairs(req.user.tenantId);
   res.json({ success: true, data: { rates, provider }, requestId: req.id });
 };
 
