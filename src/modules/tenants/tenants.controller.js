@@ -137,7 +137,7 @@ export const createRole = async (req, res) => {
 export const updateRole = async (req, res) => {
   const { error, value } = updateRoleSchema.validate(req.body);
   if (error) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: error.message } });
-  const data = await service.updateRole(req.user.tenantId, req.params.key, value, req.user.sub);
+  const data = await service.updateRole(req.user.tenantId, req.params.key, value, req.user.sub, req.user.permissions ?? []);
   res.json({ success: true, data });
 };
 
